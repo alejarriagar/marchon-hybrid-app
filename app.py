@@ -20,9 +20,9 @@ from src.ui.components import (
     render_kpi_table, render_exercise_item
 )
 from src.database.repository import (
-    init_db, save_full_session_log, get_completed_sessions_count, 
-    get_all_user_1rms, update_user_1rm, get_recent_workout_history,
-    log_readiness, export_all_logs_dataframe
+    init_db, save_single_set, get_day_logged_sets, finalize_session_summary,
+    get_completed_sessions_count, get_all_user_1rms, update_user_1rm, 
+    get_recent_workout_history, log_readiness, export_all_logs_dataframe
 )
 from src.services.progression import calculate_estimated_1rm, calculate_target_weight, get_week_periodization_wave, calculate_running_10k_paces
 from src.seed_data import SEPTEMBER_PROGRAM, OCTOBER_BJJ_PROGRAM, PROGRAMS_CATALOG
@@ -52,7 +52,7 @@ active_program_data = SEPTEMBER_PROGRAM if st.session_state["active_program_id"]
 current_wave = get_week_periodization_wave(st.session_state["current_block_week"])
 
 # -------------------------------------------------------------
-# 1. TIRA HORIZONTAL DE CALENDARIO (SCROLL FORZADO EN MÓVIL)
+# 1. TIRA HORIZONTAL DE CALENDARIO
 # -------------------------------------------------------------
 cal_cols = st.columns(7)
 for idx, day in enumerate(active_program_data):
@@ -73,9 +73,13 @@ for idx, day in enumerate(active_program_data):
             st.rerun()
 
 current_day = active_program_data[st.session_state["selected_day_idx"]]
+today_date_str = f"2026-09-{current_day.date_num.zfill(2)}"
+
+# Obtener series ya guardadas en la base de datos para hoy
+saved_sets_map = get_day_logged_sets(today_date_str, current_day.day_id)
 
 # -------------------------------------------------------------
-# 2. CABECERA MARCHON (TODAY + PROGRAMAS + SUBTABS)
+# 2. CABECERA MARCHON
 # -------------------------------------------------------------
 st.markdown(f"""
 <div style="margin-top: 0.2rem; margin-bottom: 0.5rem;">
@@ -96,11 +100,9 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# VISTA: WORKOUT CON 3 NIVELES COLAPSABLES (BLOQUE -> EJERCICIO -> SERIES)
+# VISTA: WORKOUT CON GUARDADO INMEDIATO POR SERIE
 # -------------------------------------------------------------
 if st.session_state["current_view"] == "workout":
-    sets_to_save = []
-
     if current_day.is_rest_day:
         st.markdown(
             '<div style="background: #161922; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; text-align: center; padding: 2.5rem 1rem;">'
@@ -110,16 +112,13 @@ if st.session_state["current_view"] == "workout":
             unsafe_allow_html=True
         )
     else:
-        # NIVEL 1: BLOQUES COLAPSABLES CON CÓDIGO DE COLOR
         for b_idx, block in enumerate(current_day.blocks):
-            block_code_lower = block.code.lower()
             block_label = f"[{block.code}]  {block.title.upper()} ({block.subtitle})"
             
             with st.expander(block_label, expanded=(b_idx == 0 or b_idx == 1)):
                 if block.rest_block_desc:
                     st.markdown(f"<div style='color: #9CA3AF; font-size: 0.72rem; margin-bottom: 8px; text-transform: uppercase;'>PAUTA DE DESCANSO: {block.rest_block_desc}</div>", unsafe_allow_html=True)
 
-                # NIVEL 2: EJERCICIOS INDIVIDUALES COLAPSABLES
                 for e_idx, ex in enumerate(block.exercises):
                     if block.code == "R":
                         paces = calculate_running_10k_paces(st.session_state["target_10k_time"])
@@ -147,29 +146,55 @@ if st.session_state["current_view"] == "workout":
                             if ex.notes:
                                 st.markdown(f"<div style='color: #9CA3AF; font-size: 0.75rem; margin-bottom: 10px;'>• {ex.notes}</div>", unsafe_allow_html=True)
 
-                            # NIVEL 3: CADA SERIE INDIVIDUALMENTE COLAPSABLE
+                            # RECORRIDO DE SERIES CON GUARDADO ATÓMICO
                             for s_num in range(1, num_sets + 1):
+                                is_saved = (ex.name, s_num) in saved_sets_map
+                                saved_data = saved_sets_map.get((ex.name, s_num), {})
+
                                 default_pct = pct_wave[s_num - 1] if (block.code=="S" and s_num <= len(pct_wave)) else (ex.intensity_pct*100 if ex.intensity_pct else 75.0)
                                 calc_weight = calculate_target_weight(base_1rm, default_pct / 100.0) if ex.exercise_key else (ex.default_weight or 20.0)
 
-                                set_label = f"SERIE #{s_num}  •  {default_pct}% 1RM  •  {calc_weight} KG"
+                                # Si ya estaba guardada en BD, usamos sus datos reales
+                                current_w = saved_data.get("weight", calc_weight)
+                                current_r = saved_data.get("reps", default_reps)
+                                current_rpe = saved_data.get("rpe", 8.0)
+
+                                # Cabecera de la serie: muestra [✓ GUARDADA] si ya está en SQLite
+                                status_tag = f"✓ GUARDADA: {current_w} KG x {current_r}" if is_saved else f"{default_pct}% 1RM • {calc_weight} KG"
+                                set_label = f"SERIE #{s_num}  •  {status_tag}"
                                 
-                                with st.expander(set_label, expanded=(s_num == 1)):
+                                # Si no está guardada y es la primera pendiente, la abrimos por defecto
+                                with st.expander(set_label, expanded=(not is_saved and s_num == 1) or is_saved):
                                     c_w, c_r, c_rpe = st.columns([1.4, 1.2, 1.4])
                                     with c_w:
-                                        s_w = st.number_input("Peso (kg)", min_value=0.0, value=calc_weight, step=2.5, key=f"mw_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
+                                        s_w = st.number_input("Peso (kg)", min_value=0.0, value=float(current_w), step=2.5, key=f"mw_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
                                     with c_r:
-                                        s_r = st.number_input("Reps", min_value=1, max_value=30, value=default_reps, step=1, key=f"mr_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
+                                        s_r = st.number_input("Reps", min_value=1, max_value=30, value=int(current_r), step=1, key=f"mr_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
                                     with c_rpe:
-                                        s_rpe = st.selectbox("RPE", [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0], index=4, key=f"mrpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
+                                        rpe_opts = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0]
+                                        idx_rpe = rpe_opts.index(float(current_rpe)) if float(current_rpe) in rpe_opts else 4
+                                        s_rpe = st.selectbox("RPE", rpe_opts, index=idx_rpe, key=f"mrpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
                                     
                                     est_1rm = calculate_estimated_1rm(s_w, s_r)
-                                    st.markdown(f"<div style='text-align: right; color: #9CA3AF; font-size: 0.72rem; margin-top: 4px;'>1RM ESTIMADO: <b style='color: #10B981;'>{est_1rm} KG</b></div>", unsafe_allow_html=True)
+                                    st.markdown(f"<div style='text-align: right; color: #9CA3AF; font-size: 0.72rem; margin-top: 4px; margin-bottom: 6px;'>1RM ESTIMADO: <b style='color: #10B981;'>{est_1rm} KG</b></div>", unsafe_allow_html=True)
 
-                                    sets_to_save.append({
-                                        "exercise_name": ex.name, "set_num": s_num, "pct_1rm": default_pct,
-                                        "weight": s_w, "reps": s_r, "rpe": s_rpe, "est_1rm": est_1rm
-                                    })
+                                    # BOTÓN DE GUARDADO INMEDIATO DE ESTA SERIE EN SQLITE
+                                    btn_set_label = "ACTUALIZAR SERIE" if is_saved else f"✓ GUARDAR SERIE #{s_num}"
+                                    if st.button(btn_set_label, key=f"btn_save_set_{ex.name}_{s_num}", use_container_width=True, type="primary" if not is_saved else "secondary"):
+                                        save_single_set(
+                                            date=today_date_str,
+                                            day_id=current_day.day_id,
+                                            exercise_name=ex.name,
+                                            set_num=s_num,
+                                            pct_1rm=default_pct,
+                                            weight=s_w,
+                                            reps=s_r,
+                                            rpe=s_rpe,
+                                            est_1rm=est_1rm
+                                        )
+                                        st.toast(f"Serie #{s_num} guardada en marchon.db ✓")
+                                        time.sleep(0.5)
+                                        st.rerun()
 
                             rest_mins = (ex.rest_seconds or 120) // 60
                             rest_secs = (ex.rest_seconds or 120) % 60
@@ -186,12 +211,16 @@ if st.session_state["current_view"] == "workout":
         st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
         sauna_done = st.checkbox("Sauna seca realizada hoy (20-30 min)", key="sauna_check")
 
-        if st.button("GUARDAR SESIÓN", use_container_width=True, type="primary"):
-            save_full_session_log(
-                day_id=current_day.day_id, date=f"2026-09-{current_day.date_num.zfill(2)}",
-                title=current_day.title, sets_records=sets_to_save, sauna=sauna_done, duration=55
+        # El botón final solo sella el resumen del día (las series ya están 100% a salvo en SQLite)
+        if st.button("FINALIZAR ENTRENAMIENTO COMPLETO", use_container_width=True, type="primary"):
+            finalize_session_summary(
+                day_id=current_day.day_id,
+                date=today_date_str,
+                title=current_day.title,
+                sauna=sauna_done,
+                duration=55
             )
-            st.success(f"Sesión de {current_day.day_name} registrada con éxito.")
+            st.success(f"¡Entrenamiento de {current_day.day_name} finalizado con éxito!")
             time.sleep(1)
             st.rerun()
 
