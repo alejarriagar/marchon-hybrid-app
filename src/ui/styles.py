@@ -25,9 +25,27 @@ def apply_custom_styles():
         background: #161922;
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 14px;
-        padding: 1.1rem;
-        margin-bottom: 0.9rem;
+        padding: 1rem;
+        margin-bottom: 0.8rem;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Tarjeta de Serie para Móvil */
+    .mobile-set-box {
+        background: #191D26;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 0.75rem 0.85rem;
+        margin-bottom: 0.6rem;
+    }
+
+    .mobile-set-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.4rem;
+        padding-bottom: 0.3rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     .badge-kpi {
@@ -104,7 +122,6 @@ def apply_custom_styles():
         letter-spacing: 0.5px;
     }
 
-    /* Botones táctiles optimizados */
     div.stButton > button {
         background-color: #242936;
         color: white;

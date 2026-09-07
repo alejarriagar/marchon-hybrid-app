@@ -39,9 +39,8 @@ if not check_pin_auth(default_pin="6367"):
 
 user_1rms = get_all_user_1rms()
 
-# Inicialización de Estados
 if "device_mode" not in st.session_state:
-    st.session_state["device_mode"] = "mobile"  # Por defecto optimizado para móvil
+    st.session_state["device_mode"] = "mobile"
 if "active_program_id" not in st.session_state:
     st.session_state["active_program_id"] = "perform_sep"
 if "selected_day_idx" not in st.session_state:
@@ -59,15 +58,13 @@ active_program_data = SEPTEMBER_PROGRAM if st.session_state["active_program_id"]
 active_program_title = "FASE 1 (Sept)" if st.session_state["active_program_id"] == "perform_sep" else "FASE 2 (Oct + BJJ)"
 current_wave = get_week_periodization_wave(st.session_state["current_block_week"])
 
-# -------------------------------------------------------------
-# TOP BAR CON TOGGLE DE DISPOSITIVO (📱 MÓVIL / 💻 WEB)
-# -------------------------------------------------------------
+# Barra superior con selector de modo
 top_c1, top_c2 = st.columns([3, 1.5])
 with top_c1:
     render_top_bar(program_name=f"PERFORM • {active_program_title}", streak_days=4 + get_completed_sessions_count())
 with top_c2:
-    mode_label = "📱 Modo Móvil" if st.session_state["device_mode"] == "mobile" else "💻 Modo Web"
-    if st.button(f"Cambiar a: {'💻 Web' if st.session_state['device_mode'] == 'mobile' else '📱 Móvil'}", key="toggle_device_btn", use_container_width=True):
+    mode_text = "💻 Cambiar a Web" if st.session_state["device_mode"] == "mobile" else "📱 Cambiar a Móvil"
+    if st.button(mode_text, key="toggle_device_btn", use_container_width=True):
         st.session_state["device_mode"] = "desktop" if st.session_state["device_mode"] == "mobile" else "mobile"
         st.rerun()
 
@@ -117,7 +114,6 @@ if st.session_state["current_view"] == "plan":
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
     current_day = active_program_data[st.session_state["selected_day_idx"]]
 
-    # Función común para renderizar el entrenamiento
     def render_workout_content():
         tags_html = "".join([f'<span class="badge-tag">{t}</span>' for t in current_day.tags])
         kpi_html = ""
@@ -178,51 +174,94 @@ if st.session_state["current_view"] == "plan":
                             num_sets = current_wave["sets"]
                             default_reps = current_wave["reps"]
                             pct_wave = current_wave["pct_wave"]
-                            
-                            cols_head = st.columns([0.8, 1.8, 2.0, 1.4, 1.4, 1.4])
-                            cols_head[0].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>SET</span>", unsafe_allow_html=True)
-                            cols_head[1].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>% 1RM</span>", unsafe_allow_html=True)
-                            cols_head[2].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>PESO</span>", unsafe_allow_html=True)
-                            cols_head[3].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>REPS</span>", unsafe_allow_html=True)
-                            cols_head[4].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>RPE</span>", unsafe_allow_html=True)
-                            cols_head[5].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>1RM</span>", unsafe_allow_html=True)
 
-                            for s_num in range(1, num_sets + 1):
-                                sc = st.columns([0.8, 1.8, 2.0, 1.4, 1.4, 1.4])
-                                sc[0].markdown(f"<div style='color: white; font-weight: 800; margin-top: 8px;'>#{s_num}</div>", unsafe_allow_html=True)
-                                
-                                default_pct = pct_wave[s_num - 1] if s_num <= len(pct_wave) else pct_wave[-1]
-                                pct_options = [60.0, 65.0, 70.0, 72.5, 75.0, 77.5, 80.0, 82.5, 85.0, 87.5, 90.0]
-                                idx_pct = pct_options.index(default_pct) if default_pct in pct_options else 5
-                                
-                                s_pct = sc[1].selectbox(f"Pct_{s_num}", pct_options, index=idx_pct, key=f"pct_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed", format_func=lambda x: f"{x}%")
-                                calc_weight = calculate_target_weight(base_1rm, s_pct / 100.0)
-                                
-                                s_w = sc[2].number_input(f"W_{s_num}", min_value=0.0, value=calc_weight, step=2.5, key=f"w_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed")
-                                s_r = sc[3].number_input(f"R_{s_num}", min_value=1, max_value=30, value=default_reps, step=1, key=f"r_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed")
-                                s_rpe = sc[4].selectbox(f"RPE_{s_num}", [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0], index=4, key=f"rpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed")
-                                
-                                est_1rm = calculate_estimated_1rm(s_w, s_r)
-                                sc[5].markdown(f"<div style='color: #10B981; font-weight: 800; margin-top: 8px;'>{est_1rm}</div>", unsafe_allow_html=True)
+                            # Renderizado Adaptativo: Móvil (Tarjetas 3 Col) vs Desktop (Tabla 6 Col)
+                            if st.session_state["device_mode"] == "mobile":
+                                # 📱 MODO MÓVIL: Tarjetas individuales de Serie con 3 inputs amplios
+                                for s_num in range(1, num_sets + 1):
+                                    default_pct = pct_wave[s_num - 1] if s_num <= len(pct_wave) else pct_wave[-1]
+                                    calc_weight = calculate_target_weight(base_1rm, default_pct / 100.0)
 
-                                sets_to_save.append({
-                                    "exercise_name": ex.name,
-                                    "set_num": s_num,
-                                    "pct_1rm": s_pct,
-                                    "weight": s_w,
-                                    "reps": s_r,
-                                    "rpe": s_rpe,
-                                    "est_1rm": est_1rm
-                                })
+                                    st.markdown(f"""
+                                    <div class="mobile-set-box">
+                                        <div class="mobile-set-header">
+                                            <div>
+                                                <b style="color: white; font-size: 0.9rem;">SERIE #{s_num}</b>
+                                                <span class="badge-tag" style="margin-left: 0.3rem;">{default_pct}% 1RM</span>
+                                            </div>
+                                            <div>
+                                                <span style="color: #10B981; font-weight: 800; font-size: 0.85rem;">🎯 Sugerido: {calc_weight} kg</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
 
+                                    c_w, c_r, c_rpe = st.columns([1.5, 1.2, 1.3])
+                                    with c_w:
+                                        s_w = st.number_input("Peso (kg)", min_value=0.0, value=calc_weight, step=2.5, key=f"mw_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
+                                    with c_r:
+                                        s_r = st.number_input("Reps", min_value=1, max_value=30, value=default_reps, step=1, key=f"mr_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
+                                    with c_rpe:
+                                        s_rpe = st.selectbox("RPE", [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0], index=4, key=f"mrpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
+                                    
+                                    est_1rm = calculate_estimated_1rm(s_w, s_r)
+                                    st.markdown(f"<div style='text-align: right; color: #9CA3AF; font-size: 0.72rem; margin-top: -8px; margin-bottom: 8px;'>1RM Estimado: <b style='color: #10B981;'>{est_1rm} kg</b></div>", unsafe_allow_html=True)
+
+                                    sets_to_save.append({
+                                        "exercise_name": ex.name,
+                                        "set_num": s_num,
+                                        "pct_1rm": default_pct,
+                                        "weight": s_w,
+                                        "reps": s_r,
+                                        "rpe": s_rpe,
+                                        "est_1rm": est_1rm
+                                    })
+                            else:
+                                # 💻 MODO DESKTOP: Tabla panorámica de 6 columnas
+                                cols_head = st.columns([0.8, 1.8, 2.0, 1.4, 1.4, 1.4])
+                                cols_head[0].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>SET</span>", unsafe_allow_html=True)
+                                cols_head[1].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>% 1RM</span>", unsafe_allow_html=True)
+                                cols_head[2].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>PESO</span>", unsafe_allow_html=True)
+                                cols_head[3].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>REPS</span>", unsafe_allow_html=True)
+                                cols_head[4].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>RPE</span>", unsafe_allow_html=True)
+                                cols_head[5].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>1RM</span>", unsafe_allow_html=True)
+
+                                for s_num in range(1, num_sets + 1):
+                                    sc = st.columns([0.8, 1.8, 2.0, 1.4, 1.4, 1.4])
+                                    sc[0].markdown(f"<div style='color: white; font-weight: 800; margin-top: 8px;'>#{s_num}</div>", unsafe_allow_html=True)
+                                    default_pct = pct_wave[s_num - 1] if s_num <= len(pct_wave) else pct_wave[-1]
+                                    pct_options = [60.0, 65.0, 70.0, 72.5, 75.0, 77.5, 80.0, 82.5, 85.0, 87.5, 90.0]
+                                    idx_pct = pct_options.index(default_pct) if default_pct in pct_options else 5
+                                    
+                                    s_pct = sc[1].selectbox(f"Pct_{s_num}", pct_options, index=idx_pct, key=f"pct_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed", format_func=lambda x: f"{x}%")
+                                    calc_weight = calculate_target_weight(base_1rm, s_pct / 100.0)
+                                    
+                                    s_w = sc[2].number_input(f"W_{s_num}", min_value=0.0, value=calc_weight, step=2.5, key=f"w_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed")
+                                    s_r = sc[3].number_input(f"R_{s_num}", min_value=1, max_value=30, value=default_reps, step=1, key=f"r_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed")
+                                    s_rpe = sc[4].selectbox(f"RPE_{s_num}", [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0], index=4, key=f"rpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed")
+                                    
+                                    est_1rm = calculate_estimated_1rm(s_w, s_r)
+                                    sc[5].markdown(f"<div style='color: #10B981; font-weight: 800; margin-top: 8px;'>{est_1rm}</div>", unsafe_allow_html=True)
+
+                                    sets_to_save.append({
+                                        "exercise_name": ex.name,
+                                        "set_num": s_num,
+                                        "pct_1rm": s_pct,
+                                        "weight": s_w,
+                                        "reps": s_r,
+                                        "rpe": s_rpe,
+                                        "est_1rm": est_1rm
+                                    })
+
+                            # Temporizador de descanso
                             rest_mins = (ex.rest_seconds or 120) // 60
                             rest_secs = (ex.rest_seconds or 120) % 60
-                            if st.button(f"⏱️ Descanso ({rest_mins}:{rest_secs:02d})", key=f"btn_t_{ex.name}", use_container_width=True):
+                            if st.button(f"⏱️ Iniciar Descanso ({rest_mins}:{rest_secs:02d})", key=f"btn_t_{ex.name}", use_container_width=True):
                                 with st.spinner(f"⏳ Descansando {ex.rest_description}..."):
                                     time.sleep(2)
                                     st.toast(f"🔔 ¡Tiempo cumplido ({ex.rest_description})! A por la siguiente serie 💪")
 
-                            st.markdown("<hr style='border: 0.5px solid rgba(255,255,255,0.06); margin: 12px 0;'>", unsafe_allow_html=True)
+                            st.markdown("<hr style='border: 0.5px solid rgba(255,255,255,0.06); margin: 10px 0;'>", unsafe_allow_html=True)
                         else:
                             notes_with_rest = f"{ex.notes} • ⏱️ {ex.rest_description}" if ex.notes else f"⏱️ {ex.rest_description}"
                             render_exercise_item(name=ex.name, target=ex.target, notes=notes_with_rest)
@@ -243,12 +282,9 @@ if st.session_state["current_view"] == "plan":
                 time.sleep(1)
                 st.rerun()
 
-    # Layout condicional según Modo Móvil o Desktop
+    # Layout Móvil vs Desktop
     if st.session_state["device_mode"] == "mobile":
-        # 📱 MODO MÓVIL: Columna única limpia y fluida
         render_workout_content()
-        
-        # Readiness móvil al final como tarjeta
         st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
         with st.expander("⚡ Daily Readiness & Recuperación", expanded=False):
             s_val = st.slider("Calidad de Sueño (1-5)", 1, 5, 4, key="m_s")
@@ -258,9 +294,7 @@ if st.session_state["current_view"] == "plan":
                 score = log_readiness(f"2026-09-{current_day.date_num.zfill(2)}", s_val, e_val, a_val)
                 st.session_state["readiness_score"] = score
                 st.rerun()
-
     else:
-        # 💻 MODO WEB: 2 Columnas panorámicas
         col_workout, col_sidebar = st.columns([6.8, 3.2])
         with col_workout:
             render_workout_content()
