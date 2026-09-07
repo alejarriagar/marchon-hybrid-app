@@ -6,7 +6,8 @@ from src.ui.styles import apply_custom_styles
 from src.ui.components import render_top_bar, render_phase_snapshot, render_kpi_table, render_exercise_item
 from src.database.repository import (
     init_db, save_full_session_log, get_completed_sessions_count, 
-    get_all_user_1rms, update_user_1rm, get_recent_workout_history
+    get_all_user_1rms, update_user_1rm, get_recent_workout_history,
+    log_readiness, export_all_logs_dataframe
 )
 from src.services.progression import calculate_estimated_1rm, calculate_target_weight, get_week_periodization_wave, calculate_running_10k_paces
 from src.seed_data import SEPTEMBER_PROGRAM, OCTOBER_BJJ_PROGRAM, PROGRAMS_CATALOG
@@ -35,6 +36,8 @@ if "current_block_week" not in st.session_state:
     st.session_state["current_block_week"] = 1
 if "target_10k_time" not in st.session_state:
     st.session_state["target_10k_time"] = 45.0
+if "readiness_score" not in st.session_state:
+    st.session_state["readiness_score"] = 90
 
 active_program_data = SEPTEMBER_PROGRAM if st.session_state["active_program_id"] == "perform_sep" else OCTOBER_BJJ_PROGRAM
 active_program_title = "FASE 1 (Septiembre Cimentación)" if st.session_state["active_program_id"] == "perform_sep" else "FASE 2 (Octubre + BJJ)"
@@ -63,10 +66,9 @@ with nav_c5:
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# VISTA 1: PLAN SEMANAL CON GUARDADO SERIE A SERIE
+# VISTA 1: PLAN SEMANAL CON READINESS INTEGRADO
 # -------------------------------------------------------------
 if st.session_state["current_view"] == "plan":
-    # Selector de Semana del Bloque (1 a 4)
     w_col1, w_col2, w_col3, w_col4 = st.columns(4)
     with w_col1:
         if st.button("Sem 1: Acumulación (72.5-80%)", use_container_width=True, type="primary" if st.session_state["current_block_week"]==1 else "secondary"):
@@ -87,7 +89,6 @@ if st.session_state["current_view"] == "plan":
 
     st.markdown(f"<div style='font-size: 0.8rem; font-weight: 700; color: #10B981; margin-top: 5px; margin-bottom: 8px;'>ONDA ACTIVA: {current_wave['name']} • {current_wave['desc']}</div>", unsafe_allow_html=True)
     
-    # Selector de los 7 Días
     cols_cal = st.columns(7)
     for idx, day in enumerate(active_program_data):
         with cols_cal[idx]:
@@ -196,7 +197,6 @@ if st.session_state["current_view"] == "plan":
                                 est_1rm = calculate_estimated_1rm(s_w, s_r)
                                 sc[5].markdown(f"<div style='color: #10B981; font-weight: 800; margin-top: 8px;'>{est_1rm} kg</div>", unsafe_allow_html=True)
 
-                                # Añadir registro a la lista de persistencia
                                 sets_to_save.append({
                                     "exercise_name": ex.name,
                                     "set_num": s_num,
@@ -207,7 +207,6 @@ if st.session_state["current_view"] == "plan":
                                     "est_1rm": est_1rm
                                 })
 
-                            # Temporizador con Beep acústico
                             rest_mins = (ex.rest_seconds or 120) // 60
                             rest_secs = (ex.rest_seconds or 120) % 60
                             c_t1, c_t2 = st.columns([2.8, 4.2])
@@ -237,9 +236,41 @@ if st.session_state["current_view"] == "plan":
                 st.rerun()
 
     with col_sidebar:
+        # 1. Widget de Readiness Diario
+        st.markdown("""
+        <div class="marchon-card" style="margin-bottom: 1rem;">
+            <div style="font-size: 0.95rem; font-weight: 800; color: white; margin-bottom: 0.3rem;">⚡ Daily Readiness & Recuperación</div>
+            <div style="font-size: 0.75rem; color: #9CA3AF; margin-bottom: 0.6rem;">Check-in de fatiga y autorregulación</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.expander("📝 Evaluar Estado de Hoy", expanded=False):
+            s_val = st.slider("Calidad de Sueño (1-5)", 1, 5, 4)
+            e_val = st.slider("Nivel de Energía (1-5)", 1, 5, 4)
+            a_val = st.slider("Molestia en Brazo (1=Sin dolor, 5=Muy tocado)", 1, 5, 2)
+            if st.button("Calcular Readiness", use_container_width=True):
+                score = log_readiness(f"2026-09-{current_day.date_num.zfill(2)}", s_val, e_val, a_val)
+                st.session_state["readiness_score"] = score
+                st.rerun()
+
+        score_color = "#10B981" if st.session_state["readiness_score"] >= 80 else "#F59E0B" if st.session_state["readiness_score"] >= 65 else "#EF4444"
+        rec_text = "Óptimo para mover cargas pesadas" if st.session_state["readiness_score"] >= 80 else "Moderado: Mantén RIR 2" if st.session_state["readiness_score"] >= 65 else "Fatiga alta: Reduce 5% peso y sauna"
+
+        st.markdown(f"""
+        <div style="background: #1D222E; border-radius: 8px; padding: 0.6rem 0.9rem; margin-bottom: 1rem; border-left: 3px solid {score_color};">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #9CA3AF; font-size: 0.8rem; font-weight: 700;">SCORE BIOLÓGICO</span>
+                <span style="color: {score_color}; font-weight: 900; font-size: 1.1rem;">{st.session_state['readiness_score']}%</span>
+            </div>
+            <div style="color: #E2E8F0; font-size: 0.75rem; margin-top: 2px;">{rec_text}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # 2. Phase Snapshot
         total_sessions = 3 + get_completed_sessions_count()
         render_phase_snapshot(sessions=total_sessions, pbs=2, total_time=f"{total_sessions * 55 // 60}h {total_sessions * 55 % 60}m")
         
+        # 3. Tabla de KPIs
         kpis_data = [
             {"name": "Bench Press", "metric": "1RM Actual", "baseline": f"{user_1rms.get('bench_press', 120)*0.95:.1f} kg", "retest": f"{user_1rms.get('bench_press', 120)} kg", "delta": "+5.2%"},
             {"name": "Back Squat", "metric": "1RM Actual", "baseline": "135 kg", "retest": f"{user_1rms.get('back_squat', 140)} kg", "delta": "+3.7%"},
@@ -248,6 +279,7 @@ if st.session_state["current_view"] == "plan":
         ]
         render_kpi_table(kpis_data)
         
+        # 4. Sauna
         st.markdown(
             '<div class="marchon-card" style="margin-top: 1.5rem;">'
             '<div style="font-size: 1rem; font-weight: 700; color: white; margin-bottom: 0.3rem;">🧖 Protocolo Sauna & Recuperación</div>'
@@ -328,11 +360,11 @@ elif st.session_state["current_view"] == "kpis":
         st.plotly_chart(fig_pie, use_container_width=True)
 
 # -------------------------------------------------------------
-# VISTA 4: HISTORIAL DE ENTRENAMIENTOS & TRANSICIÓN DE FASE
+# VISTA 4: HISTORIAL DE ENTRENAMIENTOS & EXPORTADOR CSV
 # -------------------------------------------------------------
 elif st.session_state["current_view"] == "history":
-    st.markdown("<h2 style='color: white; font-weight: 800;'>📜 Historial de Sesiones & Transición a Octubre</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #9CA3AF;'>Registro inmutable de todas las sesiones y series guardadas en tu base de datos local SQLite.</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: white; font-weight: 800;'>📜 Historial de Sesiones & Base de Datos</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #9CA3AF;'>Registro inmutable de todas las series guardadas en tu base de datos local SQLite.</p>", unsafe_allow_html=True)
 
     # Asistente de Transición de Mes (Septiembre -> Octubre)
     st.markdown("""
@@ -371,7 +403,19 @@ elif st.session_state["current_view"] == "history":
             st.rerun()
 
     st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True)
-    st.markdown("<h4 style='color: white; font-weight: 800;'>Últimas Sesiones Guardadas</h4>", unsafe_allow_html=True)
+    
+    # Exportador a CSV
+    df_export = export_all_logs_dataframe()
+    if not df_export.empty:
+        csv_data = df_export.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 EXPORTAR TODAS LAS SERIES A CSV (EXCEL)",
+            data=csv_data,
+            file_name="marchon_training_logs.csv",
+            mime="text/csv"
+        )
+    
+    st.markdown("<h4 style='color: white; font-weight: 800; margin-top: 15px;'>Últimas Sesiones Guardadas</h4>", unsafe_allow_html=True)
     
     history_logs = get_recent_workout_history(limit=15)
     if not history_logs:
