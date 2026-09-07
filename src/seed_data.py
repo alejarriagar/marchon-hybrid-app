@@ -1,6 +1,5 @@
 ﻿from src.models.workout import DayWorkout, WorkoutBlock, Exercise, Program
 
-# FASE 1: SEPTIEMBRE (Cimentación - 4 Días Gym + Running + Bici)
 SEPTEMBER_PROGRAM = [
     DayWorkout(
         day_id="lun_sep", day_name="Lun", date_num="7", type_badge="Upper Fuerza",
@@ -16,10 +15,26 @@ SEPTEMBER_PROGRAM = [
                 ]
             ),
             WorkoutBlock(
-                code="S", title="PRIMARY STRENGTH", subtitle="Velocidad y control • RPE 8",
+                code="S", title="PRIMARY STRENGTH (% 1RM WAVE)", subtitle="Semana 1: Onda 72.5% - 80% 1RM • RPE 8",
                 exercises=[
-                    Exercise(name="Barbell Bench Press (o Floor Press)", target="4 x 5 reps (RPE 8)", default_weight=90.0),
-                    Exercise(name="Weighted Pull-ups (o Chin-ups)", target="4 x 5-6 reps (RPE 8)", default_weight=15.0)
+                    Exercise(
+                        name="Barbell Bench Press",
+                        exercise_key="bench_press",
+                        intensity_pct=0.775,
+                        target_sets=4,
+                        target_reps=5,
+                        target="4 x 5 @ 72.5% - 80% 1RM (RPE 8)",
+                        notes="Pausa de 1 segundo en el pecho. Velocidad concéntrica máxima."
+                    ),
+                    Exercise(
+                        name="Weighted Pull-ups (o Chin-ups)",
+                        exercise_key="pull_up",
+                        intensity_pct=0.75,
+                        target_sets=4,
+                        target_reps=5,
+                        target="4 x 5 @ 70% - 77.5% 1RM",
+                        notes="Extensión completa abajo y barbilla claramente sobre la barra."
+                    )
                 ]
             ),
             WorkoutBlock(
@@ -73,10 +88,26 @@ SEPTEMBER_PROGRAM = [
                 ]
             ),
             WorkoutBlock(
-                code="S", title="PRIMARY STRENGTH", subtitle="Fuerza máxima",
+                code="S", title="PRIMARY STRENGTH (% 1RM WAVE)", subtitle="Semana 1: Onda 75% - 82.5% 1RM",
                 exercises=[
-                    Exercise(name="Barbell Back Squat", target="4 x 5 reps (RPE 8)", default_weight=110.0),
-                    Exercise(name="Trap Bar Deadlift", target="3 x 5 reps (RPE 8)", default_weight=130.0)
+                    Exercise(
+                        name="Barbell Back Squat",
+                        exercise_key="back_squat",
+                        intensity_pct=0.775,
+                        target_sets=4,
+                        target_reps=5,
+                        target="4 x 5 @ 75% - 80% 1RM (RPE 8)",
+                        notes="Profundidad paralela, tronco firme."
+                    ),
+                    Exercise(
+                        name="Trap Bar Deadlift",
+                        exercise_key="deadlift",
+                        intensity_pct=0.80,
+                        target_sets=3,
+                        target_reps=5,
+                        target="3 x 5 @ 77.5% - 82.5% 1RM (RPE 8)",
+                        notes="Empuje potente desde el suelo."
+                    )
                 ]
             ),
             WorkoutBlock(
@@ -99,9 +130,17 @@ SEPTEMBER_PROGRAM = [
                 exercises=[Exercise(name="Kettlebell Halos + Rotaciones torácicas", target="2 x 8 e/s")]
             ),
             WorkoutBlock(
-                code="S", title="STRENGTH & DENSITY", subtitle="Fuerza vertical",
+                code="S", title="STRENGTH & DENSITY", subtitle="Semana 1: 72.5% - 77.5% 1RM",
                 exercises=[
-                    Exercise(name="Standing Barbell Overhead Press (OHP)", target="4 x 6 reps", default_weight=55.0),
+                    Exercise(
+                        name="Standing Barbell Overhead Press (OHP)",
+                        exercise_key="ohp",
+                        intensity_pct=0.75,
+                        target_sets=4,
+                        target_reps=5,
+                        target="4 x 5 @ 72.5% - 77.5% 1RM (RPE 8)",
+                        notes="Glúteos y core compactados."
+                    ),
                     Exercise(name="Barbell Pendlay Row", target="4 x 6-8 reps", default_weight=75.0)
                 ]
             ),
@@ -147,7 +186,6 @@ SEPTEMBER_PROGRAM = [
     )
 ]
 
-# FASE 2: OCTUBRE (Híbrido Completo: 3 Días Gym + 2 Días BJJ + Running + Bici)
 OCTOBER_BJJ_PROGRAM = [
     DayWorkout(
         day_id="lun_oct", day_name="Lun", date_num="5", type_badge="Gym + BJJ 19:30",
@@ -159,10 +197,24 @@ OCTOBER_BJJ_PROGRAM = [
                 exercises=[Exercise(name="Band Pull-aparts + Deadbugs", target="2 x 15 reps")]
             ),
             WorkoutBlock(
-                code="S", title="PRIMARY STRENGTH", subtitle="Fuerza máxima de empuje",
+                code="S", title="PRIMARY STRENGTH (% 1RM WAVE)", subtitle="75% - 80% 1RM • RPE 8",
                 exercises=[
-                    Exercise(name="Barbell Bench Press (o Floor Press)", target="4 x 5 reps (RPE 8)", default_weight=92.5),
-                    Exercise(name="Weighted Chin-ups", target="4 x 5 reps", default_weight=17.5)
+                    Exercise(
+                        name="Barbell Bench Press",
+                        exercise_key="bench_press",
+                        intensity_pct=0.775,
+                        target_sets=4,
+                        target_reps=5,
+                        target="4 x 5 @ 75% - 80% 1RM (RPE 8)"
+                    ),
+                    Exercise(
+                        name="Weighted Chin-ups",
+                        exercise_key="pull_up",
+                        intensity_pct=0.75,
+                        target_sets=4,
+                        target_reps=5,
+                        target="4 x 5 @ 72.5% - 77.5% 1RM"
+                    )
                 ]
             ),
             WorkoutBlock(
@@ -194,9 +246,16 @@ OCTOBER_BJJ_PROGRAM = [
         tags=["Hybrid", "Legs", "BJJ Prehab"], kpis=["Trap Bar Deadlift", "Back Squat"],
         blocks=[
             WorkoutBlock(
-                code="S", title="PRIMARY STRENGTH", subtitle="Cadena posterior fuerte",
+                code="S", title="PRIMARY STRENGTH (% 1RM WAVE)", subtitle="77.5% - 82.5% 1RM",
                 exercises=[
-                    Exercise(name="Trap Bar Deadlift", target="4 x 5 reps (RPE 8)", default_weight=135.0),
+                    Exercise(
+                        name="Trap Bar Deadlift",
+                        exercise_key="deadlift",
+                        intensity_pct=0.80,
+                        target_sets=4,
+                        target_reps=5,
+                        target="4 x 5 @ 77.5% - 82.5% 1RM (RPE 8)"
+                    ),
                     Exercise(name="Bulgarian Split Squat", target="3 x 8 e/s", default_weight=24.0)
                 ]
             ),

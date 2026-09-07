@@ -19,7 +19,6 @@ st.set_page_config(
 
 apply_custom_styles()
 
-# Cargar 1RMs actuales del usuario
 user_1rms = get_all_user_1rms()
 
 if "active_program_id" not in st.session_state:
@@ -52,7 +51,7 @@ with nav_c4:
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# VISTA 1: PLAN SEMANAL CON % 1RM CALCULADO EN TIEMPO REAL
+# VISTA 1: PLAN SEMANAL CON % 1RM POR SERIE
 # -------------------------------------------------------------
 if st.session_state["current_view"] == "plan":
     st.markdown(f"<div style='font-size: 0.8rem; font-weight: 700; color: #9CA3AF; text-transform: uppercase; margin-bottom: 0.4rem;'>MICROCIELO SEMANAL • {active_program_title}</div>", unsafe_allow_html=True)
@@ -68,7 +67,7 @@ if st.session_state["current_view"] == "plan":
     st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
     current_day = active_program_data[st.session_state["selected_day_idx"]]
 
-    col_workout, col_sidebar = st.columns([6.5, 3.5])
+    col_workout, col_sidebar = st.columns([6.8, 3.2])
 
     with col_workout:
         tags_html = "".join([f'<span class="badge-tag">{t}</span>' for t in current_day.tags])
@@ -99,32 +98,53 @@ if st.session_state["current_view"] == "plan":
                 expander_label = f"{block.code}  •  {block.title} ({block.subtitle})"
                 with st.expander(expander_label, expanded=True):
                     for ex in block.exercises:
-                        if block.code == "S" and (ex.intensity_pct or ex.default_weight):
-                            # Calcular peso objetivo según 1RM
+                        if block.code == "S" and (ex.exercise_key or ex.intensity_pct or ex.default_weight):
                             base_1rm = user_1rms.get(ex.exercise_key, 100.0) if ex.exercise_key else 100.0
-                            calculated_target_w = calculate_target_weight(base_1rm, ex.intensity_pct) if ex.intensity_pct else ex.default_weight
-                            pct_label = f" ({int(ex.intensity_pct*100)}% de tu 1RM: {base_1rm} kg)" if ex.intensity_pct else ""
-
-                            st.markdown(f"<div style='color: white; font-weight: 700; font-size: 1rem; margin-top: 10px;'>{ex.name}</div>", unsafe_allow_html=True)
-                            st.markdown(f"<div style='color: #10B981; font-weight: 600; font-size: 0.8rem; margin-bottom: 10px;'>🎯 Peso Sugerido: {calculated_target_w} kg{pct_label}</div>", unsafe_allow_html=True)
+                            
+                            st.markdown(
+                                f'<div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 10px; margin-bottom: 5px;">'
+                                f'<span style="color: white; font-weight: 800; font-size: 1.05rem;">{ex.name}</span>'
+                                f'<span style="color: #9CA3AF; font-size: 0.8rem;">Tu 1RM Base: <b style="color: #FF5722;">{base_1rm} kg</b></span>'
+                                f'</div>',
+                                unsafe_allow_html=True
+                            )
+                            st.markdown(f"<div style='color: #9CA3AF; font-size: 0.8rem; margin-bottom: 12px;'>Objetivo: {ex.target}</div>", unsafe_allow_html=True)
                             
                             num_sets = ex.target_sets or 4
-                            cols_head = st.columns([1, 2, 2, 2, 1.5])
+                            default_reps = ex.target_reps or 5
+                            
+                            # Cabecera de la tabla con columna % 1RM
+                            cols_head = st.columns([0.8, 1.8, 2.0, 1.4, 1.4, 1.4])
                             cols_head[0].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>SET</span>", unsafe_allow_html=True)
-                            cols_head[1].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>PESO (KG)</span>", unsafe_allow_html=True)
-                            cols_head[2].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>REPS</span>", unsafe_allow_html=True)
-                            cols_head[3].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>RPE</span>", unsafe_allow_html=True)
-                            cols_head[4].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>EST. 1RM</span>", unsafe_allow_html=True)
+                            cols_head[1].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>% 1RM</span>", unsafe_allow_html=True)
+                            cols_head[2].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>PESO (KG)</span>", unsafe_allow_html=True)
+                            cols_head[3].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>REPS</span>", unsafe_allow_html=True)
+                            cols_head[4].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>RPE</span>", unsafe_allow_html=True)
+                            cols_head[5].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>EST. 1RM</span>", unsafe_allow_html=True)
+
+                            # Onda progresiva estándar de Ollie Marchon para 4 series
+                            pct_wave_defaults = [72.5, 75.0, 77.5, 80.0] if num_sets >= 4 else [75.0, 77.5, 80.0]
 
                             for s_num in range(1, num_sets + 1):
-                                sc = st.columns([1, 2, 2, 2, 1.5])
+                                sc = st.columns([0.8, 1.8, 2.0, 1.4, 1.4, 1.4])
                                 sc[0].markdown(f"<div style='color: white; font-weight: 800; margin-top: 8px;'>#{s_num}</div>", unsafe_allow_html=True)
-                                s_w = sc[1].number_input(f"W_{s_num}", min_value=0.0, value=calculated_target_w, step=2.5, key=f"w_{ex.name}_{s_num}", label_visibility="collapsed")
-                                s_r = sc[2].number_input(f"R_{s_num}", min_value=1, max_value=30, value=ex.target_reps or 5, step=1, key=f"r_{ex.name}_{s_num}", label_visibility="collapsed")
-                                s_rpe = sc[3].selectbox(f"RPE_{s_num}", [7.0, 7.5, 8.0, 8.5, 9.0], index=2, key=f"rpe_{ex.name}_{s_num}", label_visibility="collapsed")
+                                
+                                # Selector interactivo de % 1RM
+                                default_pct = pct_wave_defaults[s_num - 1] if s_num <= len(pct_wave_defaults) else 77.5
+                                pct_options = [60.0, 65.0, 70.0, 72.5, 75.0, 77.5, 80.0, 82.5, 85.0, 87.5, 90.0]
+                                idx_pct = pct_options.index(default_pct) if default_pct in pct_options else 5
+                                
+                                s_pct = sc[1].selectbox(f"Pct_{s_num}", pct_options, index=idx_pct, key=f"pct_{ex.name}_{s_num}", label_visibility="collapsed", format_func=lambda x: f"{x}%")
+                                
+                                # Peso sugerido calculado en base al % elegido
+                                calc_weight = calculate_target_weight(base_1rm, s_pct / 100.0)
+                                
+                                s_w = sc[2].number_input(f"W_{s_num}", min_value=0.0, value=calc_weight, step=2.5, key=f"w_{ex.name}_{s_num}", label_visibility="collapsed")
+                                s_r = sc[3].number_input(f"R_{s_num}", min_value=1, max_value=30, value=default_reps, step=1, key=f"r_{ex.name}_{s_num}", label_visibility="collapsed")
+                                s_rpe = sc[4].selectbox(f"RPE_{s_num}", [7.0, 7.5, 8.0, 8.5, 9.0], index=2, key=f"rpe_{ex.name}_{s_num}", label_visibility="collapsed")
                                 
                                 est_1rm = calculate_estimated_1rm(s_w, s_r)
-                                sc[4].markdown(f"<div style='color: #10B981; font-weight: 800; margin-top: 8px;'>{est_1rm} kg</div>", unsafe_allow_html=True)
+                                sc[5].markdown(f"<div style='color: #10B981; font-weight: 800; margin-top: 8px;'>{est_1rm} kg</div>", unsafe_allow_html=True)
                             
                             st.markdown("<hr style='border: 0.5px solid rgba(255,255,255,0.06); margin: 15px 0;'>", unsafe_allow_html=True)
                         else:
@@ -148,7 +168,7 @@ if st.session_state["current_view"] == "plan":
         render_phase_snapshot(sessions=total_sessions, pbs=2, total_time=f"{total_sessions * 55 // 60}h {total_sessions * 55 % 60}m")
         
         kpis_data = [
-            {"name": "Bench Press", "metric": "5 RM Weight", "baseline": f"{user_1rms.get('bench_press', 120)*0.85:.1f} kg", "retest": f"{user_1rms.get('bench_press', 120)} kg (1RM)", "delta": "+4.3%"},
+            {"name": "Bench Press", "metric": "1RM Actual", "baseline": f"{user_1rms.get('bench_press', 120)*0.95:.1f} kg", "retest": f"{user_1rms.get('bench_press', 120)} kg", "delta": "+5.2%"},
             {"name": "Back Squat", "metric": "1RM Actual", "baseline": "135 kg", "retest": f"{user_1rms.get('back_squat', 140)} kg", "delta": "+3.7%"},
             {"name": "Trap Bar Deadlift", "metric": "1RM Actual", "baseline": "155 kg", "retest": f"{user_1rms.get('deadlift', 165)} kg", "delta": "+6.4%"},
             {"name": "San Silvestre 10k", "metric": "Ritmo Umbral", "baseline": "4:45/km", "retest": "4:28/km", "delta": "+6.0%"},
@@ -242,7 +262,6 @@ elif st.session_state["current_view"] == "settings_1rm":
     st.markdown("<p style='color: #9CA3AF;'>Introduce tus marcas máximas reales. Todos los entrenamientos calcularán automáticamente los pesos exactos de cada serie según el % programado.</p>", unsafe_allow_html=True)
 
     c1, c2 = st.columns(2)
-    
     with c1:
         st.markdown('<div class="marchon-card"><h4 style="color: white;">Tren Superior</h4>', unsafe_allow_html=True)
         new_bench = st.number_input("Barbell Bench Press (1RM en kg)", min_value=20.0, max_value=300.0, value=float(user_1rms.get("bench_press", 120.0)), step=2.5)
