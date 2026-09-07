@@ -4,7 +4,10 @@ import pandas as pd
 import plotly.express as px
 from src.ui.styles import apply_custom_styles
 from src.ui.components import render_top_bar, render_phase_snapshot, render_kpi_table, render_exercise_item
-from src.database.repository import init_db, log_session, get_completed_sessions_count, get_all_user_1rms, update_user_1rm
+from src.database.repository import (
+    init_db, save_full_session_log, get_completed_sessions_count, 
+    get_all_user_1rms, update_user_1rm, get_recent_workout_history
+)
 from src.services.progression import calculate_estimated_1rm, calculate_target_weight, get_week_periodization_wave, calculate_running_10k_paces
 from src.seed_data import SEPTEMBER_PROGRAM, OCTOBER_BJJ_PROGRAM, PROGRAMS_CATALOG
 
@@ -40,7 +43,7 @@ current_wave = get_week_periodization_wave(st.session_state["current_block_week"
 render_top_bar(program_name=f"PERFORM • {active_program_title}", streak_days=4 + get_completed_sessions_count())
 
 # Selector de Vistas
-nav_c1, nav_c2, nav_c3, nav_c4 = st.columns([1, 1, 1, 1])
+nav_c1, nav_c2, nav_c3, nav_c4, nav_c5 = st.columns([1, 1, 1, 1, 1])
 with nav_c1:
     if st.button("📅 PLAN SEMANAL", use_container_width=True):
         st.session_state["current_view"] = "plan"
@@ -51,13 +54,16 @@ with nav_c3:
     if st.button("📊 PROGRESO & KPIS", use_container_width=True):
         st.session_state["current_view"] = "kpis"
 with nav_c4:
-    if st.button("⚙️ MIS 1RMs & RITMOS", use_container_width=True):
+    if st.button("📜 HISTORIAL", use_container_width=True):
+        st.session_state["current_view"] = "history"
+with nav_c5:
+    if st.button("⚙️ MIS 1RMs", use_container_width=True):
         st.session_state["current_view"] = "settings_1rm"
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# VISTA 1: PLAN SEMANAL CON PERIODIZACIÓN POR SEMANAS
+# VISTA 1: PLAN SEMANAL CON GUARDADO SERIE A SERIE
 # -------------------------------------------------------------
 if st.session_state["current_view"] == "plan":
     # Selector de Semana del Bloque (1 a 4)
@@ -110,6 +116,8 @@ if st.session_state["current_view"] == "plan":
             unsafe_allow_html=True
         )
 
+        sets_to_save = []
+
         if current_day.is_rest_day:
             st.markdown(
                 '<div class="marchon-card" style="text-align: center; padding: 2.5rem 1rem;">'
@@ -134,13 +142,12 @@ if st.session_state["current_view"] == "plan":
                         )
 
                     for ex in block.exercises:
-                        # Si es el bloque de Running, mostrar ritmos calculados de la San Silvestre
                         if block.code == "R":
                             paces = calculate_running_10k_paces(st.session_state["target_10k_time"])
                             st.markdown(
                                 f'<div style="background: #1D222E; border-left: 3px solid #10B981; padding: 0.6rem 0.9rem; border-radius: 6px; margin-bottom: 8px;">'
                                 f'<div style="color: white; font-weight: 700;">{ex.name}</div>'
-                                f'<div style="color: #10B981; font-size: 0.82rem; font-weight: 600; margin-top: 2px;">🎯 Ritmo San Silvestre Objetivo: {paces["intervals_1000m"]} (para meta {st.session_state["target_10k_time"]} min)</div>'
+                                f'<div style="color: #10B981; font-size: 0.82rem; font-weight: 600; margin-top: 2px;">🎯 Ritmo Objetivo San Silvestre: {paces["intervals_1000m"]}</div>'
                                 f'<div style="color: #9CA3AF; font-size: 0.75rem; margin-top: 2px;">{ex.notes if ex.notes else ex.target} • ⏱️ {ex.rest_description}</div>'
                                 f'</div>',
                                 unsafe_allow_html=True
@@ -189,6 +196,17 @@ if st.session_state["current_view"] == "plan":
                                 est_1rm = calculate_estimated_1rm(s_w, s_r)
                                 sc[5].markdown(f"<div style='color: #10B981; font-weight: 800; margin-top: 8px;'>{est_1rm} kg</div>", unsafe_allow_html=True)
 
+                                # Añadir registro a la lista de persistencia
+                                sets_to_save.append({
+                                    "exercise_name": ex.name,
+                                    "set_num": s_num,
+                                    "pct_1rm": s_pct,
+                                    "weight": s_w,
+                                    "reps": s_r,
+                                    "rpe": s_rpe,
+                                    "est_1rm": est_1rm
+                                })
+
                             # Temporizador con Beep acústico
                             rest_mins = (ex.rest_seconds or 120) // 60
                             rest_secs = (ex.rest_seconds or 120) % 60
@@ -197,17 +215,6 @@ if st.session_state["current_view"] == "plan":
                                 if st.button(f"⏱️ Iniciar Descanso ({rest_mins}:{rest_secs:02d})", key=f"btn_t_{ex.name}", use_container_width=True):
                                     with st.spinner(f"⏳ Descansando {ex.rest_description}..."):
                                         time.sleep(2)
-                                        st.markdown("""
-                                        <script>
-                                        let ctx = new (window.AudioContext || window.webkitAudioContext)();
-                                        let osc = ctx.createOscillator();
-                                        osc.type = 'sine';
-                                        osc.frequency.setValueAtTime(800, ctx.currentTime);
-                                        osc.connect(ctx.destination);
-                                        osc.start();
-                                        osc.stop(ctx.currentTime + 0.3);
-                                        </script>
-                                        """, unsafe_allow_html=True)
                                         st.toast(f"🔔 ¡Tiempo cumplido ({ex.rest_description})! A por la siguiente serie 💪")
 
                             st.markdown("<hr style='border: 0.5px solid rgba(255,255,255,0.06); margin: 15px 0;'>", unsafe_allow_html=True)
@@ -217,8 +224,17 @@ if st.session_state["current_view"] == "plan":
 
             if st.button("🔥 COMPLETAR Y GUARDAR ESTA SESIÓN", use_container_width=True):
                 sauna_checked = st.session_state.get("sauna_check", False)
-                log_session(day_id=current_day.day_id, date=f"2026-09-{current_day.date_num.zfill(2)}", duration=55, sauna=sauna_checked)
-                st.success(f"¡Sesión de {current_day.day_name} registrada en la base de datos! 🔥")
+                save_full_session_log(
+                    day_id=current_day.day_id,
+                    date=f"2026-09-{current_day.date_num.zfill(2)}",
+                    title=current_day.title,
+                    sets_records=sets_to_save,
+                    sauna=sauna_checked,
+                    duration=55
+                )
+                st.success(f"¡Sesión de {current_day.day_name} y todas las series guardadas en marchon.db! 🔥")
+                time.sleep(1)
+                st.rerun()
 
     with col_sidebar:
         total_sessions = 3 + get_completed_sessions_count()
@@ -312,7 +328,74 @@ elif st.session_state["current_view"] == "kpis":
         st.plotly_chart(fig_pie, use_container_width=True)
 
 # -------------------------------------------------------------
-# VISTA 4: PANEL DE GESTIÓN DE 1RMs Y RITMOS SAN SILVESTRE
+# VISTA 4: HISTORIAL DE ENTRENAMIENTOS & TRANSICIÓN DE FASE
+# -------------------------------------------------------------
+elif st.session_state["current_view"] == "history":
+    st.markdown("<h2 style='color: white; font-weight: 800;'>📜 Historial de Sesiones & Transición a Octubre</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #9CA3AF;'>Registro inmutable de todas las sesiones y series guardadas en tu base de datos local SQLite.</p>", unsafe_allow_html=True)
+
+    # Asistente de Transición de Mes (Septiembre -> Octubre)
+    st.markdown("""
+    <div class="marchon-card" style="border: 1px solid #10B981; background: rgba(16, 185, 129, 0.05); margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <span class="badge-green">ASISTENTE DE PROGRESIÓN</span>
+                <h3 style="color: white; margin: 0.3rem 0; font-weight: 800;">¿Has completado el Bloque de Septiembre?</h3>
+                <p style="color: #9CA3AF; font-size: 0.85rem; margin: 0;">Aplica automáticamente las ganancias de fuerza de Septiembre y transiciona al programa de Octubre con Jiu-Jitsu.</p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    c_trans1, c_trans2 = st.columns([3, 1])
+    with c_trans1:
+        st.markdown(f"""
+        <div style="background: #161922; padding: 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+            <div style="color: white; font-weight: 700; margin-bottom: 6px;">Nuevas Marcas Proyectadas para Octubre (+2.5 a +5 kg de sobrecarga):</div>
+            <div style="font-size: 0.85rem; color: #9CA3AF;">• Bench Press: <b>{user_1rms.get('bench_press', 120)+2.5} kg</b> (Anterior: {user_1rms.get('bench_press', 120)} kg)</div>
+            <div style="font-size: 0.85rem; color: #9CA3AF;">• Back Squat: <b>{user_1rms.get('back_squat', 140)+5.0} kg</b> (Anterior: {user_1rms.get('back_squat', 140)} kg)</div>
+            <div style="font-size: 0.85rem; color: #9CA3AF;">• Deadlift: <b>{user_1rms.get('deadlift', 165)+7.5} kg</b> (Anterior: {user_1rms.get('deadlift', 165)} kg)</div>
+            <div style="font-size: 0.85rem; color: #9CA3AF;">• Overhead Press: <b>{user_1rms.get('ohp', 70)+2.5} kg</b> (Anterior: {user_1rms.get('ohp', 70)} kg)</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with c_trans2:
+        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+        if st.button("🚀 APLICAR Y ACTIVAR OCTUBRE", use_container_width=True, type="primary"):
+            update_user_1rm("bench_press", user_1rms.get('bench_press', 120)+2.5)
+            update_user_1rm("back_squat", user_1rms.get('back_squat', 140)+5.0)
+            update_user_1rm("deadlift", user_1rms.get('deadlift', 165)+7.5)
+            update_user_1rm("ohp", user_1rms.get('ohp', 70)+2.5)
+            st.session_state["active_program_id"] = "perform_oct_bjj"
+            st.session_state["selected_day_idx"] = 0
+            st.toast("¡Octubre activado con las nuevas marcas de 1RM! 🔥")
+            st.rerun()
+
+    st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color: white; font-weight: 800;'>Últimas Sesiones Guardadas</h4>", unsafe_allow_html=True)
+    
+    history_logs = get_recent_workout_history(limit=15)
+    if not history_logs:
+        st.info("Aún no has guardado sesiones. Cuando completes un entrenamiento en el Plan Semanal, aparecerá aquí con sus series y volumen.")
+    else:
+        for log in history_logs:
+            sauna_icon = "🧖 Sauna Realizada" if log["sauna"] else "Sin Sauna"
+            st.markdown(f"""
+            <div class="marchon-card" style="margin-bottom: 0.6rem; padding: 0.8rem 1.2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="color: #9CA3AF; font-size: 0.75rem; font-weight: 700;">{log['date']}</div>
+                        <div style="color: white; font-weight: 800; font-size: 1.05rem;">{log['title']}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="color: #10B981; font-weight: 800; font-size: 0.95rem;">{log['volume_kg']} kg levantados</span>
+                        <div style="color: #9CA3AF; font-size: 0.75rem;">⏱️ {log['duration']} min • {sauna_icon}</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+# -------------------------------------------------------------
+# VISTA 5: PANEL DE GESTIÓN DE 1RMs Y RITMOS SAN SILVESTRE
 # -------------------------------------------------------------
 elif st.session_state["current_view"] == "settings_1rm":
     st.markdown("<h2 style='color: white; font-weight: 800;'>⚙️ Gestión de Marcas 1RM & Ritmos San Silvestre</h2>", unsafe_allow_html=True)
@@ -323,7 +406,6 @@ elif st.session_state["current_view"] == "settings_1rm":
         st.markdown('<div class="marchon-card"><h4 style="color: white;">🏋️‍♂️ 1RMs de Fuerza (kg)</h4>', unsafe_allow_html=True)
         new_bench = st.number_input("Barbell Bench Press (1RM en kg)", min_value=20.0, max_value=300.0, value=float(user_1rms.get("bench_press", 120.0)), step=2.5)
         new_ohp = st.number_input("Standing Overhead Press (1RM en kg)", min_value=15.0, max_value=200.0, value=float(user_1rms.get("ohp", 70.0)), step=2.5)
-        new_pull = st.number_input("Weighted Pull-up (Peso corporal + Lastre en kg)", min_value=40.0, max_value=250.0, value=float(user_1rms.get("pull_up", 100.0)), step=2.5)
         new_squat = st.number_input("Barbell Back Squat (1RM en kg)", min_value=20.0, max_value=400.0, value=float(user_1rms.get("back_squat", 140.0)), step=2.5)
         new_deadlift = st.number_input("Trap Bar Deadlift (1RM en kg)", min_value=30.0, max_value=450.0, value=float(user_1rms.get("deadlift", 165.0)), step=2.5)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -355,7 +437,6 @@ elif st.session_state["current_view"] == "settings_1rm":
     if st.button("💾 GUARDAR TODOS LOS PARÁMETROS", use_container_width=True):
         update_user_1rm("bench_press", new_bench)
         update_user_1rm("ohp", new_ohp)
-        update_user_1rm("pull_up", new_pull)
         update_user_1rm("back_squat", new_squat)
         update_user_1rm("deadlift", new_deadlift)
         st.success("¡Perfil y marcas actualizadas! Plan totalmente sincronizado.")
