@@ -1,7 +1,7 @@
 ﻿import streamlit as st
 
 def check_pin_auth(default_pin="6367") -> bool:
-    """Pantalla de bloqueo por PIN con estética Marchon"""
+    """Pantalla de bloqueo por PIN con estética Marchon (Blindada contra errores de secretos)"""
     if st.session_state.get("authenticated", False):
         return True
 
@@ -20,7 +20,14 @@ def check_pin_auth(default_pin="6367") -> bool:
             pin_input = st.text_input("PIN de Seguridad", type="password", placeholder="Introduce tu PIN", label_visibility="collapsed")
             submit = st.form_submit_button("🔓 DESBLOQUEAR SISTEMA", use_container_width=True)
             if submit:
-                valid_pin = st.secrets.get("APP_PIN", default_pin) if hasattr(st, "secrets") and "APP_PIN" in st.secrets else default_pin
+                # Lectura 100% segura del PIN
+                valid_pin = default_pin
+                try:
+                    if hasattr(st, "secrets") and "APP_PIN" in st.secrets:
+                        valid_pin = str(st.secrets["APP_PIN"])
+                except Exception:
+                    valid_pin = default_pin
+
                 if pin_input == valid_pin:
                     st.session_state["authenticated"] = True
                     st.toast("¡Acceso concedido! Cargando plan...")
