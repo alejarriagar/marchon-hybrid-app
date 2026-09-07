@@ -7,7 +7,29 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Tabla para logs de ejercicios detallados por serie
+    # Tabla de 1RMs del usuario
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_1rms (
+        exercise_key TEXT PRIMARY KEY,
+        exercise_name TEXT,
+        one_rep_max REAL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+    
+    # Insertar valores base iniciales si no existen
+    default_1rms = [
+        ("bench_press", "Barbell Bench Press", 120.0),
+        ("back_squat", "Barbell Back Squat", 140.0),
+        ("deadlift", "Trap Bar Deadlift", 165.0),
+        ("ohp", "Standing Overhead Press", 70.0),
+        ("pull_up", "Weighted Pull-up (Total)", 100.0) # 80kg peso + 20kg lastre
+    ]
+    cursor.executemany("""
+    INSERT OR IGNORE INTO user_1rms (exercise_key, exercise_name, one_rep_max)
+    VALUES (?, ?, ?)
+    """, default_1rms)
+    
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS exercise_set_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,7 +44,6 @@ def init_db():
     )
     """)
     
-    # Tabla para registro de sesiones
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS completed_sessions (
         day_id TEXT PRIMARY KEY,
@@ -36,14 +57,22 @@ def init_db():
     conn.commit()
     conn.close()
 
-def save_exercise_sets(day_id: str, date: str, exercise_name: str, sets_list: list):
+def get_all_user_1rms() -> Dict[str, float]:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    for s in sets_list:
-        cursor.execute("""
-        INSERT INTO exercise_set_logs (date, day_id, exercise_name, set_number, weight, reps, rpe, completed)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (date, day_id, exercise_name, s["set_num"], s["weight"], s["reps"], s["rpe"], s["completed"]))
+    cursor.execute("SELECT exercise_key, one_rep_max FROM user_1rms")
+    records = cursor.fetchall()
+    conn.close()
+    return {k: v for k, v in records}
+
+def update_user_1rm(exercise_key: str, new_1rm: float):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+    UPDATE user_1rms 
+    SET one_rep_max = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE exercise_key = ?
+    """, (new_1rm, exercise_key))
     conn.commit()
     conn.close()
 
