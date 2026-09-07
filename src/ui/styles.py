@@ -3,32 +3,33 @@
 def apply_custom_styles():
     st.markdown("""
     <style>
-    /* Estilos globales y reset */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    .main {
+    .stApp {
         background-color: #0E1117;
-        padding-top: 1rem;
     }
 
-    /* Ocultar barra superior y footer de Streamlit */
-    #MainMenu, header, footer {visibility: hidden;}
-
-    /* Contenedor principal de tarjetas */
-    .marchon-card {
+    div[data-testid="stForm"] {
         background: #161922;
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 14px;
         padding: 1.25rem;
-        margin-bottom: 1rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    }
+
+    .marchon-card {
+        background: #161922;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 1.1rem;
+        margin-bottom: 0.9rem;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     }
 
-    /* Badges / Pastillas */
     .badge-kpi {
         background-color: #FF5722;
         color: white;
@@ -43,12 +44,12 @@ def apply_custom_styles():
     .badge-tag {
         background-color: #242936;
         color: #E2E8F0;
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         font-weight: 600;
-        padding: 0.2rem 0.6rem;
-        border-radius: 12px;
+        padding: 0.2rem 0.5rem;
+        border-radius: 10px;
         display: inline-block;
-        margin-right: 0.3rem;
+        margin-right: 0.25rem;
     }
 
     .badge-green {
@@ -61,39 +62,11 @@ def apply_custom_styles():
         border-radius: 6px;
     }
 
-    /* Bloque de entrenamiento (W, S, H, E) */
-    .block-header {
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: #FFFFFF;
-        margin-bottom: 0.75rem;
-    }
-
-    .block-letter {
-        width: 28px;
-        height: 28px;
-        border-radius: 6px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        font-size: 0.85rem;
-    }
-
-    .letter-w { background: #374151; color: #9CA3AF; }
-    .letter-s { background: #FF5722; color: #FFFFFF; }
-    .letter-h { background: #3B82F6; color: #FFFFFF; }
-    .letter-e { background: #10B981; color: #FFFFFF; }
-
-    /* Fila de ejercicios */
     .exercise-row {
         background: #1D222E;
         border-radius: 8px;
-        padding: 0.6rem 0.9rem;
-        margin-bottom: 0.5rem;
+        padding: 0.6rem 0.8rem;
+        margin-bottom: 0.4rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -103,42 +76,42 @@ def apply_custom_styles():
     .exercise-name {
         color: #F3F4F6;
         font-weight: 500;
-        font-size: 0.9rem;
+        font-size: 0.88rem;
     }
 
     .exercise-reps {
         color: #10B981;
         font-weight: 700;
-        font-size: 0.85rem;
+        font-size: 0.82rem;
     }
 
-    /* KPI Snapshot Cards */
     .stat-box {
         background: #1D222E;
         border-radius: 10px;
-        padding: 0.75rem;
+        padding: 0.6rem;
         text-align: center;
         border: 1px solid rgba(255, 255, 255, 0.05);
     }
     .stat-value {
-        font-size: 1.5rem;
+        font-size: 1.3rem;
         font-weight: 800;
         color: #FFFFFF;
     }
     .stat-label {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         color: #9CA3AF;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
 
-    /* Botones y Radio Pills */
+    /* Botones táctiles optimizados */
     div.stButton > button {
         background-color: #242936;
         color: white;
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 8px;
         font-weight: 600;
+        min-height: 42px;
         transition: all 0.2s ease;
     }
     div.stButton > button:hover {

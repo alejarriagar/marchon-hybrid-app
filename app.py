@@ -1,12 +1,10 @@
 ﻿import sys
 import os
 
-# Asegurar compatibilidad de rutas en servidores Linux / Cloud
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 import streamlit as st
 
-# st.set_page_config DEBE ser el primer comando de Streamlit
 st.set_page_config(
     page_title="MARCHON Hybrid OS",
     page_icon="⚡",
@@ -30,10 +28,7 @@ from src.database.repository import (
 from src.services.progression import calculate_estimated_1rm, calculate_target_weight, get_week_periodization_wave, calculate_running_10k_paces
 from src.seed_data import SEPTEMBER_PROGRAM, OCTOBER_BJJ_PROGRAM, PROGRAMS_CATALOG
 
-# Inicializar Base de Datos SQLite
 init_db()
-
-# Aplicar estilos CSS
 apply_custom_styles()
 
 # -------------------------------------------------------------
@@ -45,6 +40,8 @@ if not check_pin_auth(default_pin="6367"):
 user_1rms = get_all_user_1rms()
 
 # Inicialización de Estados
+if "device_mode" not in st.session_state:
+    st.session_state["device_mode"] = "mobile"  # Por defecto optimizado para móvil
 if "active_program_id" not in st.session_state:
     st.session_state["active_program_id"] = "perform_sep"
 if "selected_day_idx" not in st.session_state:
@@ -59,79 +56,79 @@ if "readiness_score" not in st.session_state:
     st.session_state["readiness_score"] = 90
 
 active_program_data = SEPTEMBER_PROGRAM if st.session_state["active_program_id"] == "perform_sep" else OCTOBER_BJJ_PROGRAM
-active_program_title = "FASE 1 (Septiembre Cimentación)" if st.session_state["active_program_id"] == "perform_sep" else "FASE 2 (Octubre + BJJ)"
+active_program_title = "FASE 1 (Sept)" if st.session_state["active_program_id"] == "perform_sep" else "FASE 2 (Oct + BJJ)"
 current_wave = get_week_periodization_wave(st.session_state["current_block_week"])
 
-render_top_bar(program_name=f"PERFORM • {active_program_title}", streak_days=4 + get_completed_sessions_count())
+# -------------------------------------------------------------
+# TOP BAR CON TOGGLE DE DISPOSITIVO (📱 MÓVIL / 💻 WEB)
+# -------------------------------------------------------------
+top_c1, top_c2 = st.columns([3, 1.5])
+with top_c1:
+    render_top_bar(program_name=f"PERFORM • {active_program_title}", streak_days=4 + get_completed_sessions_count())
+with top_c2:
+    mode_label = "📱 Modo Móvil" if st.session_state["device_mode"] == "mobile" else "💻 Modo Web"
+    if st.button(f"Cambiar a: {'💻 Web' if st.session_state['device_mode'] == 'mobile' else '📱 Móvil'}", key="toggle_device_btn", use_container_width=True):
+        st.session_state["device_mode"] = "desktop" if st.session_state["device_mode"] == "mobile" else "mobile"
+        st.rerun()
 
-# Selector de Vistas
-nav_c1, nav_c2, nav_c3, nav_c4, nav_c5 = st.columns([1, 1, 1, 1, 1])
+# Menú de Navegación
+nav_c1, nav_c2, nav_c3, nav_c4, nav_c5 = st.columns(5)
 with nav_c1:
-    if st.button("📅 PLAN SEMANAL", use_container_width=True):
+    if st.button("📅 PLAN", use_container_width=True):
         st.session_state["current_view"] = "plan"
 with nav_c2:
-    if st.button("🧭 EXPLORAR PROGRAMAS", use_container_width=True):
+    if st.button("🧭 EXPLORAR", use_container_width=True):
         st.session_state["current_view"] = "explore"
 with nav_c3:
-    if st.button("📊 PROGRESO & KPIS", use_container_width=True):
+    if st.button("📊 KPIS", use_container_width=True):
         st.session_state["current_view"] = "kpis"
 with nav_c4:
     if st.button("📜 HISTORIAL", use_container_width=True):
         st.session_state["current_view"] = "history"
 with nav_c5:
-    if st.button("⚙️ MIS 1RMs", use_container_width=True):
+    if st.button("⚙️ 1RMs", use_container_width=True):
         st.session_state["current_view"] = "settings_1rm"
 
-st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------
 # VISTA 1: PLAN SEMANAL
 # -------------------------------------------------------------
 if st.session_state["current_view"] == "plan":
-    w_col1, w_col2, w_col3, w_col4 = st.columns(4)
-    with w_col1:
-        if st.button("Sem 1: Acumulación (72.5-80%)", use_container_width=True, type="primary" if st.session_state["current_block_week"]==1 else "secondary"):
-            st.session_state["current_block_week"] = 1
-            st.rerun()
-    with w_col2:
-        if st.button("Sem 2: Sobrecarga (75-82.5%)", use_container_width=True, type="primary" if st.session_state["current_block_week"]==2 else "secondary"):
-            st.session_state["current_block_week"] = 2
-            st.rerun()
-    with w_col3:
-        if st.button("Sem 3: Pico (80-87.5%)", use_container_width=True, type="primary" if st.session_state["current_block_week"]==3 else "secondary"):
-            st.session_state["current_block_week"] = 3
-            st.rerun()
-    with w_col4:
-        if st.button("Sem 4: Deload (60-65%)", use_container_width=True, type="primary" if st.session_state["current_block_week"]==4 else "secondary"):
-            st.session_state["current_block_week"] = 4
-            st.rerun()
+    # Selector de Semanas
+    w_cols = st.columns(4)
+    for w_i in range(1, 5):
+        w_name = f"Sem {w_i}: {['Acum.', 'Sobrec.', 'Pico', 'Deload'][w_i-1]}"
+        with w_cols[w_i-1]:
+            if st.button(w_name, key=f"w_btn_{w_i}", use_container_width=True, type="primary" if st.session_state["current_block_week"]==w_i else "secondary"):
+                st.session_state["current_block_week"] = w_i
+                st.rerun()
 
-    st.markdown(f"<div style='font-size: 0.8rem; font-weight: 700; color: #10B981; margin-top: 5px; margin-bottom: 8px;'>ONDA ACTIVA: {current_wave['name']} • {current_wave['desc']}</div>", unsafe_allow_html=True)
-    
+    # Selector de Días Semanales
     cols_cal = st.columns(7)
     for idx, day in enumerate(active_program_data):
         with cols_cal[idx]:
-            label = f"{day.day_name} {day.date_num}\n{day.type_badge}"
-            if st.button(label, key=f"cal_btn_{idx}", use_container_width=True):
+            is_sel = (idx == st.session_state["selected_day_idx"])
+            label = f"{day.day_name} {day.date_num}\n{day.type_badge.split(':')[0]}"
+            if st.button(label, key=f"cal_btn_{idx}", use_container_width=True, type="primary" if is_sel else "secondary"):
                 st.session_state["selected_day_idx"] = idx
                 st.rerun()
 
-    st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
     current_day = active_program_data[st.session_state["selected_day_idx"]]
 
-    col_workout, col_sidebar = st.columns([6.8, 3.2])
-
-    with col_workout:
+    # Función común para renderizar el entrenamiento
+    def render_workout_content():
         tags_html = "".join([f'<span class="badge-tag">{t}</span>' for t in current_day.tags])
         kpi_html = ""
         if current_day.kpis:
-            kpi_html = f'<div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.3rem;"><span class="badge-kpi">KPI</span><span style="color: #E2E8F0; font-size: 0.85rem; font-weight: 600;">{", ".join(current_day.kpis)}</span></div>'
+            kpi_html = f'<div style="display: flex; align-items: center; gap: 0.4rem; margin-top: 0.3rem;"><span class="badge-kpi">KPI</span><span style="color: #E2E8F0; font-size: 0.8rem; font-weight: 600;">{", ".join(current_day.kpis)}</span></div>'
 
         st.markdown(
             f'<div class="marchon-card">'
             f'<div style="display: flex; justify-content: space-between; align-items: flex-start;">'
-            f'<div>{tags_html}<h2 style="color: white; margin: 0.4rem 0; font-size: 1.5rem; font-weight: 800;">{current_day.title}</h2>{kpi_html}</div>'
-            f'<div style="text-align: right;"><span class="badge-green">{current_day.day_name} {current_day.date_num} • {current_wave["name"].split(":")[0]}</span></div>'
+            f'<div>{tags_html}<h3 style="color: white; margin: 0.3rem 0; font-size: 1.3rem; font-weight: 800;">{current_day.title}</h3>{kpi_html}</div>'
+            f'<div style="text-align: right;"><span class="badge-green">{current_day.day_name} {current_day.date_num}</span></div>'
             f'</div></div>',
             unsafe_allow_html=True
         )
@@ -140,34 +137,26 @@ if st.session_state["current_view"] == "plan":
 
         if current_day.is_rest_day:
             st.markdown(
-                '<div class="marchon-card" style="text-align: center; padding: 2.5rem 1rem;">'
-                '<div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🧘‍♂️</div>'
+                '<div class="marchon-card" style="text-align: center; padding: 2rem 1rem;">'
+                '<div style="font-size: 2.2rem; margin-bottom: 0.5rem;">🧘‍♂️</div>'
                 '<h3 style="color: white; font-weight: 800;">Día de Descanso Total & Regeneración</h3>'
-                '<p style="color: #9CA3AF; max-width: 500px; margin: 0 auto;">El descanso es donde ocurre la adaptación biológica. Prioriza 8 horas de sueño, buena nutrición y tu sesión de sauna.</p>'
+                '<p style="color: #9CA3AF; font-size: 0.85rem;">Prioriza 8 horas de sueño, nutrición limpia y sauna.</p>'
                 '</div>',
                 unsafe_allow_html=True
             )
         else:
             for block in current_day.blocks:
                 rest_info = f" • ⏱️ {block.rest_block_desc}" if block.rest_block_desc else ""
-                expander_label = f"{block.code}  •  {block.title} ({block.subtitle}){rest_info}"
+                expander_label = f"{block.code}  •  {block.title}{rest_info}"
                 
                 with st.expander(expander_label, expanded=True):
-                    if block.rest_block_desc:
-                        st.markdown(
-                            f'<div style="background: rgba(255, 87, 34, 0.08); border-left: 3px solid #FF5722; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.8rem; color: #E2E8F0; margin-bottom: 12px;">'
-                            f'⏱️ <b>Pauta de Descanso:</b> {block.rest_block_desc}'
-                            f'</div>',
-                            unsafe_allow_html=True
-                        )
-
                     for ex in block.exercises:
                         if block.code == "R":
                             paces = calculate_running_10k_paces(st.session_state["target_10k_time"])
                             st.markdown(
-                                f'<div style="background: #1D222E; border-left: 3px solid #10B981; padding: 0.6rem 0.9rem; border-radius: 6px; margin-bottom: 8px;">'
-                                f'<div style="color: white; font-weight: 700;">{ex.name}</div>'
-                                f'<div style="color: #10B981; font-size: 0.82rem; font-weight: 600; margin-top: 2px;">🎯 Ritmo Objetivo San Silvestre: {paces["intervals_1000m"]}</div>'
+                                f'<div style="background: #1D222E; border-left: 3px solid #10B981; padding: 0.6rem 0.8rem; border-radius: 6px; margin-bottom: 8px;">'
+                                f'<div style="color: white; font-weight: 700; font-size: 0.9rem;">{ex.name}</div>'
+                                f'<div style="color: #10B981; font-size: 0.8rem; font-weight: 700; margin-top: 2px;">🎯 Ritmo Objetivo: {paces["intervals_1000m"]}</div>'
                                 f'<div style="color: #9CA3AF; font-size: 0.75rem; margin-top: 2px;">{ex.notes if ex.notes else ex.target} • ⏱️ {ex.rest_description}</div>'
                                 f'</div>',
                                 unsafe_allow_html=True
@@ -176,27 +165,27 @@ if st.session_state["current_view"] == "plan":
                             base_1rm = user_1rms.get(ex.exercise_key, 100.0) if ex.exercise_key else 100.0
                             
                             st.markdown(
-                                f'<div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 10px; margin-bottom: 4px;">'
-                                f'<div><span style="color: white; font-weight: 800; font-size: 1.05rem;">{ex.name}</span>'
-                                f'<span style="background: #242936; color: #10B981; font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; margin-left: 0.6rem;">⏱️ {ex.rest_description}</span></div>'
-                                f'<span style="color: #9CA3AF; font-size: 0.8rem;">1RM Base: <b style="color: #FF5722;">{base_1rm} kg</b></span>'
+                                f'<div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px; margin-bottom: 2px;">'
+                                f'<div><span style="color: white; font-weight: 800; font-size: 0.95rem;">{ex.name}</span>'
+                                f'<span style="background: #242936; color: #10B981; font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.4rem; border-radius: 4px; margin-left: 0.4rem;">⏱️ {ex.rest_description}</span></div>'
+                                f'<span style="color: #9CA3AF; font-size: 0.75rem;">1RM: <b style="color: #FF5722;">{base_1rm} kg</b></span>'
                                 f'</div>',
                                 unsafe_allow_html=True
                             )
                             if ex.notes:
-                                st.markdown(f"<div style='color: #9CA3AF; font-size: 0.78rem; margin-bottom: 10px;'>💡 {ex.notes}</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div style='color: #9CA3AF; font-size: 0.75rem; margin-bottom: 8px;'>💡 {ex.notes}</div>", unsafe_allow_html=True)
                             
                             num_sets = current_wave["sets"]
                             default_reps = current_wave["reps"]
                             pct_wave = current_wave["pct_wave"]
                             
                             cols_head = st.columns([0.8, 1.8, 2.0, 1.4, 1.4, 1.4])
-                            cols_head[0].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>SET</span>", unsafe_allow_html=True)
-                            cols_head[1].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>% 1RM</span>", unsafe_allow_html=True)
-                            cols_head[2].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>PESO (KG)</span>", unsafe_allow_html=True)
-                            cols_head[3].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>REPS</span>", unsafe_allow_html=True)
-                            cols_head[4].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>RPE</span>", unsafe_allow_html=True)
-                            cols_head[5].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>EST. 1RM</span>", unsafe_allow_html=True)
+                            cols_head[0].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>SET</span>", unsafe_allow_html=True)
+                            cols_head[1].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>% 1RM</span>", unsafe_allow_html=True)
+                            cols_head[2].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>PESO</span>", unsafe_allow_html=True)
+                            cols_head[3].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>REPS</span>", unsafe_allow_html=True)
+                            cols_head[4].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>RPE</span>", unsafe_allow_html=True)
+                            cols_head[5].markdown("<span style='color:#9CA3AF; font-size:0.7rem; font-weight:700;'>1RM</span>", unsafe_allow_html=True)
 
                             for s_num in range(1, num_sets + 1):
                                 sc = st.columns([0.8, 1.8, 2.0, 1.4, 1.4, 1.4])
@@ -214,7 +203,7 @@ if st.session_state["current_view"] == "plan":
                                 s_rpe = sc[4].selectbox(f"RPE_{s_num}", [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0], index=4, key=f"rpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed")
                                 
                                 est_1rm = calculate_estimated_1rm(s_w, s_r)
-                                sc[5].markdown(f"<div style='color: #10B981; font-weight: 800; margin-top: 8px;'>{est_1rm} kg</div>", unsafe_allow_html=True)
+                                sc[5].markdown(f"<div style='color: #10B981; font-weight: 800; margin-top: 8px;'>{est_1rm}</div>", unsafe_allow_html=True)
 
                                 sets_to_save.append({
                                     "exercise_name": ex.name,
@@ -228,81 +217,79 @@ if st.session_state["current_view"] == "plan":
 
                             rest_mins = (ex.rest_seconds or 120) // 60
                             rest_secs = (ex.rest_seconds or 120) % 60
-                            c_t1, c_t2 = st.columns([2.8, 4.2])
-                            with c_t1:
-                                if st.button(f"⏱️ Iniciar Descanso ({rest_mins}:{rest_secs:02d})", key=f"btn_t_{ex.name}", use_container_width=True):
-                                    with st.spinner(f"⏳ Descansando {ex.rest_description}..."):
-                                        time.sleep(2)
-                                        st.toast(f"🔔 ¡Tiempo cumplido ({ex.rest_description})! A por la siguiente serie 💪")
+                            if st.button(f"⏱️ Descanso ({rest_mins}:{rest_secs:02d})", key=f"btn_t_{ex.name}", use_container_width=True):
+                                with st.spinner(f"⏳ Descansando {ex.rest_description}..."):
+                                    time.sleep(2)
+                                    st.toast(f"🔔 ¡Tiempo cumplido ({ex.rest_description})! A por la siguiente serie 💪")
 
-                            st.markdown("<hr style='border: 0.5px solid rgba(255,255,255,0.06); margin: 15px 0;'>", unsafe_allow_html=True)
+                            st.markdown("<hr style='border: 0.5px solid rgba(255,255,255,0.06); margin: 12px 0;'>", unsafe_allow_html=True)
                         else:
                             notes_with_rest = f"{ex.notes} • ⏱️ {ex.rest_description}" if ex.notes else f"⏱️ {ex.rest_description}"
                             render_exercise_item(name=ex.name, target=ex.target, notes=notes_with_rest)
 
-            if st.button("🔥 COMPLETAR Y GUARDAR ESTA SESIÓN", use_container_width=True):
-                sauna_checked = st.session_state.get("sauna_check", False)
+            # Checkbox de sauna antes de guardar
+            sauna_done = st.checkbox("🧖 20-30 min Sauna Realizada Hoy", key="sauna_check")
+
+            if st.button("🔥 COMPLETAR Y GUARDAR SESIÓN", use_container_width=True, type="primary"):
                 save_full_session_log(
                     day_id=current_day.day_id,
                     date=f"2026-09-{current_day.date_num.zfill(2)}",
                     title=current_day.title,
                     sets_records=sets_to_save,
-                    sauna=sauna_checked,
+                    sauna=sauna_done,
                     duration=55
                 )
-                st.success(f"¡Sesión de {current_day.day_name} y todas las series guardadas en marchon.db! 🔥")
+                st.success(f"¡Sesión de {current_day.day_name} guardada en marchon.db! 🔥")
                 time.sleep(1)
                 st.rerun()
 
-    with col_sidebar:
-        st.markdown("""
-        <div class="marchon-card" style="margin-bottom: 1rem;">
-            <div style="font-size: 0.95rem; font-weight: 800; color: white; margin-bottom: 0.3rem;">⚡ Daily Readiness & Recuperación</div>
-            <div style="font-size: 0.75rem; color: #9CA3AF; margin-bottom: 0.6rem;">Check-in de fatiga y autorregulación</div>
-        </div>
-        """, unsafe_allow_html=True)
+    # Layout condicional según Modo Móvil o Desktop
+    if st.session_state["device_mode"] == "mobile":
+        # 📱 MODO MÓVIL: Columna única limpia y fluida
+        render_workout_content()
         
-        with st.expander("📝 Evaluar Estado de Hoy", expanded=False):
-            s_val = st.slider("Calidad de Sueño (1-5)", 1, 5, 4)
-            e_val = st.slider("Nivel de Energía (1-5)", 1, 5, 4)
-            a_val = st.slider("Molestia en Brazo (1=Sin dolor, 5=Muy tocado)", 1, 5, 2)
-            if st.button("Calcular Readiness", use_container_width=True):
+        # Readiness móvil al final como tarjeta
+        st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
+        with st.expander("⚡ Daily Readiness & Recuperación", expanded=False):
+            s_val = st.slider("Calidad de Sueño (1-5)", 1, 5, 4, key="m_s")
+            e_val = st.slider("Nivel de Energía (1-5)", 1, 5, 4, key="m_e")
+            a_val = st.slider("Molestia en Brazo (1-5)", 1, 5, 2, key="m_a")
+            if st.button("Calcular Readiness", key="m_btn_readiness", use_container_width=True):
                 score = log_readiness(f"2026-09-{current_day.date_num.zfill(2)}", s_val, e_val, a_val)
                 st.session_state["readiness_score"] = score
                 st.rerun()
 
-        score_color = "#10B981" if st.session_state["readiness_score"] >= 80 else "#F59E0B" if st.session_state["readiness_score"] >= 65 else "#EF4444"
-        rec_text = "Óptimo para mover cargas pesadas" if st.session_state["readiness_score"] >= 80 else "Moderado: Mantén RIR 2" if st.session_state["readiness_score"] >= 65 else "Fatiga alta: Reduce 5% peso y sauna"
-
-        st.markdown(f"""
-        <div style="background: #1D222E; border-radius: 8px; padding: 0.6rem 0.9rem; margin-bottom: 1rem; border-left: 3px solid {score_color};">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #9CA3AF; font-size: 0.8rem; font-weight: 700;">SCORE BIOLÓGICO</span>
-                <span style="color: {score_color}; font-weight: 900; font-size: 1.1rem;">{st.session_state['readiness_score']}%</span>
+    else:
+        # 💻 MODO WEB: 2 Columnas panorámicas
+        col_workout, col_sidebar = st.columns([6.8, 3.2])
+        with col_workout:
+            render_workout_content()
+        with col_sidebar:
+            st.markdown("""
+            <div class="marchon-card">
+                <div style="font-size: 0.95rem; font-weight: 800; color: white; margin-bottom: 0.3rem;">⚡ Daily Readiness</div>
+                <div style="font-size: 0.75rem; color: #9CA3AF; margin-bottom: 0.6rem;">Check-in de fatiga y autorregulación</div>
             </div>
-            <div style="color: #E2E8F0; font-size: 0.75rem; margin-top: 2px;">{rec_text}</div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+            with st.expander("📝 Evaluar Estado de Hoy", expanded=False):
+                s_val = st.slider("Calidad de Sueño (1-5)", 1, 5, 4)
+                e_val = st.slider("Nivel de Energía (1-5)", 1, 5, 4)
+                a_val = st.slider("Molestia en Brazo (1-5)", 1, 5, 2)
+                if st.button("Calcular Readiness", use_container_width=True):
+                    score = log_readiness(f"2026-09-{current_day.date_num.zfill(2)}", s_val, e_val, a_val)
+                    st.session_state["readiness_score"] = score
+                    st.rerun()
 
-        total_sessions = 3 + get_completed_sessions_count()
-        render_phase_snapshot(sessions=total_sessions, pbs=2, total_time=f"{total_sessions * 55 // 60}h {total_sessions * 55 % 60}m")
-        
-        kpis_data = [
-            {"name": "Bench Press", "metric": "1RM Actual", "baseline": f"{user_1rms.get('bench_press', 120)*0.95:.1f} kg", "retest": f"{user_1rms.get('bench_press', 120)} kg", "delta": "+5.2%"},
-            {"name": "Back Squat", "metric": "1RM Actual", "baseline": "135 kg", "retest": f"{user_1rms.get('back_squat', 140)} kg", "delta": "+3.7%"},
-            {"name": "Trap Bar Deadlift", "metric": "1RM Actual", "baseline": "155 kg", "retest": f"{user_1rms.get('deadlift', 165)} kg", "delta": "+6.4%"},
-            {"name": "San Silvestre 10k", "metric": "Ritmo Umbral", "baseline": "4:45/km", "retest": f"{calculate_running_10k_paces(st.session_state['target_10k_time'])['intervals_1000m']}", "delta": "+6.0%"},
-        ]
-        render_kpi_table(kpis_data)
-        
-        st.markdown(
-            '<div class="marchon-card" style="margin-top: 1.5rem;">'
-            '<div style="font-size: 1rem; font-weight: 700; color: white; margin-bottom: 0.3rem;">🧖 Protocolo Sauna & Recuperación</div>'
-            '<div style="font-size: 0.75rem; color: #9CA3AF; margin-bottom: 0.5rem;">Aclimatación térmica (expande volumen plasmático)</div>'
-            '</div>',
-            unsafe_allow_html=True
-        )
-        st.checkbox("20-30 min Sauna Seca Post-Entreno", key="sauna_check")
+            total_sessions = 3 + get_completed_sessions_count()
+            render_phase_snapshot(sessions=total_sessions, pbs=2, total_time=f"{total_sessions * 55 // 60}h {total_sessions * 55 % 60}m")
+            
+            kpis_data = [
+                {"name": "Bench Press", "metric": "1RM", "baseline": f"{user_1rms.get('bench_press', 120)*0.95:.1f} kg", "retest": f"{user_1rms.get('bench_press', 120)} kg", "delta": "+5.2%"},
+                {"name": "Back Squat", "metric": "1RM", "baseline": "135 kg", "retest": f"{user_1rms.get('back_squat', 140)} kg", "delta": "+3.7%"},
+                {"name": "Deadlift", "metric": "1RM", "baseline": "155 kg", "retest": f"{user_1rms.get('deadlift', 165)} kg", "delta": "+6.4%"},
+                {"name": "San Silvestre 10k", "metric": "1000m", "baseline": "4:45/km", "retest": f"{calculate_running_10k_paces(st.session_state['target_10k_time'])['intervals_1000m']}", "delta": "+6.0%"},
+            ]
+            render_kpi_table(kpis_data)
 
 # -------------------------------------------------------------
 # VISTA 2: EXPLORAR PROGRAMAS
