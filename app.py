@@ -1,4 +1,19 @@
-﻿import streamlit as st
+﻿import sys
+import os
+
+# Asegurar compatibilidad de rutas en servidores Linux / Cloud
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
+import streamlit as st
+
+# st.set_page_config DEBE ser el primer comando de Streamlit
+st.set_page_config(
+    page_title="MARCHON Hybrid OS",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
 import time
 import pandas as pd
 import plotly.express as px
@@ -15,15 +30,10 @@ from src.database.repository import (
 from src.services.progression import calculate_estimated_1rm, calculate_target_weight, get_week_periodization_wave, calculate_running_10k_paces
 from src.seed_data import SEPTEMBER_PROGRAM, OCTOBER_BJJ_PROGRAM, PROGRAMS_CATALOG
 
+# Inicializar Base de Datos SQLite
 init_db()
 
-st.set_page_config(
-    page_title="MARCHON Hybrid OS",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
-
+# Aplicar estilos CSS
 apply_custom_styles()
 
 # -------------------------------------------------------------
