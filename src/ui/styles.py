@@ -11,31 +11,92 @@ def apply_custom_styles():
 
     .stApp {
         background-color: #0E1117;
-        padding-bottom: 70px;
+        padding-bottom: 75px;
     }
 
     header[data-testid="stHeader"] {
         background: transparent !important;
     }
 
-    div[data-testid="stForm"] {
+    /* TIRA DE CALENDARIO HORIZONTAL UNIFICADA */
+    div[data-testid="stHorizontalBlock"]:has(button[key*="cal_strip_"]) {
         background: #161922;
         border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        padding: 1.25rem;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-    }
-
-    .marchon-card {
-        background: #161922;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        padding: 1rem;
+        border-radius: 18px;
+        padding: 4px 6px;
         margin-bottom: 0.8rem;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+        gap: 4px !important;
     }
 
-    /* Insignias circulares tipográficas sobrias (W, A, B, C) */
+    div.stButton > button[key*="cal_strip_"] {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 12px !important;
+        color: #9CA3AF !important;
+        padding: 4px 2px !important;
+        min-height: 64px !important;
+        font-size: 0.85rem !important;
+        line-height: 1.25 !important;
+        font-weight: 700 !important;
+    }
+
+    div.stButton > button[key*="cal_strip_"][kind="primary"] {
+        background: #000000 !important;
+        border: 1px solid rgba(255, 255, 255, 0.25) !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6) !important;
+    }
+
+    .marchon-subtabs {
+        display: flex;
+        gap: 1.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding-bottom: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .subtab-active {
+        color: #FFFFFF;
+        font-weight: 800;
+        font-size: 0.95rem;
+        position: relative;
+    }
+    .subtab-active::after {
+        content: '';
+        position: absolute;
+        bottom: -9px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: #FFFFFF;
+    }
+
+    .subtab-inactive {
+        color: #6B7280;
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    /* TARJETAS COLAPSABLES DE EJERCICIOS (EXPANDERS ESTILO NATIVO) */
+    div[data-testid="stExpander"] {
+        background: #161922 !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 12px !important;
+        margin-bottom: 0.6rem !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    div[data-testid="stExpander"] details summary {
+        font-weight: 700 !important;
+        color: #FFFFFF !important;
+        font-size: 0.92rem !important;
+        padding: 0.75rem 1rem !important;
+    }
+
+    div[data-testid="stExpander"] details summary:hover {
+        color: #FF5722 !important;
+    }
+
     .block-badge-circle {
         width: 24px;
         height: 24px;
@@ -48,7 +109,6 @@ def apply_custom_styles():
         font-weight: 900;
         font-size: 0.75rem;
         margin-right: 0.5rem;
-        letter-spacing: -0.5px;
     }
 
     .block-badge-accent {
@@ -90,7 +150,6 @@ def apply_custom_styles():
         padding: 0.15rem 0.45rem;
         border-radius: 3px;
         display: inline-block;
-        letter-spacing: 0.5px;
     }
 
     .badge-tag {
@@ -103,41 +162,6 @@ def apply_custom_styles():
         display: inline-block;
         margin-right: 0.25rem;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .badge-green {
-        background: rgba(16, 185, 129, 0.12);
-        border: 1px solid #10B981;
-        color: #10B981;
-        font-size: 0.72rem;
-        font-weight: 700;
-        padding: 0.15rem 0.45rem;
-        border-radius: 4px;
-        text-transform: uppercase;
-    }
-
-    .exercise-row {
-        background: #1D222E;
-        border-radius: 8px;
-        padding: 0.6rem 0.8rem;
-        margin-bottom: 0.4rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-left: 2px solid #374151;
-    }
-
-    .exercise-name {
-        color: #F3F4F6;
-        font-weight: 600;
-        font-size: 0.88rem;
-    }
-
-    .exercise-reps {
-        color: #10B981;
-        font-weight: 700;
-        font-size: 0.8rem;
     }
 
     .stat-box {
@@ -166,10 +190,7 @@ def apply_custom_styles():
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 8px;
         font-weight: 700;
-        font-size: 0.85rem;
         min-height: 42px;
-        transition: all 0.15s ease;
-        letter-spacing: 0.3px;
     }
     div.stButton > button:hover {
         background-color: #FF5722;

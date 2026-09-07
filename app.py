@@ -16,7 +16,7 @@ import pandas as pd
 import plotly.express as px
 from src.ui.styles import apply_custom_styles
 from src.ui.components import (
-    check_pin_auth, render_top_bar, render_phase_snapshot, 
+    check_pin_auth, render_phase_snapshot, 
     render_kpi_table, render_exercise_item
 )
 from src.database.repository import (
@@ -49,130 +49,159 @@ if "readiness_score" not in st.session_state:
     st.session_state["readiness_score"] = 90
 
 active_program_data = SEPTEMBER_PROGRAM if st.session_state["active_program_id"] == "perform_sep" else OCTOBER_BJJ_PROGRAM
-active_program_title = "PERFORM" if st.session_state["active_program_id"] == "perform_sep" else "PERFORM (BJJ)"
 current_wave = get_week_periodization_wave(st.session_state["current_block_week"])
 
 # -------------------------------------------------------------
-# 1. CALENDARIO SUPERIOR HORIZONTAL DE CÁPSULAS
+# 1. TIRA HORIZONTAL DE CALENDARIO
 # -------------------------------------------------------------
 cal_cols = st.columns(7)
 for idx, day in enumerate(active_program_data):
     with cal_cols[idx]:
         is_selected = (idx == st.session_state["selected_day_idx"])
-        dot_icon = "✓" if idx < get_completed_sessions_count() else ("○" if day.is_rest_day else "•")
-        btn_label = f"{dot_icon}\n{day.day_name}\n{day.date_num}"
+        if idx < get_completed_sessions_count():
+            icon_str = "✓"
+        elif day.is_rest_day:
+            icon_str = "○"
+        else:
+            icon_str = "•"
+            
+        btn_label = f"{icon_str}\n{day.day_name}\n{day.date_num}"
         btn_type = "primary" if is_selected else "secondary"
-        if st.button(btn_label, key=f"cal_pill_{idx}", use_container_width=True, type=btn_type):
+        
+        if st.button(btn_label, key=f"cal_strip_{idx}", use_container_width=True, type=btn_type):
             st.session_state["selected_day_idx"] = idx
             st.rerun()
 
-st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+current_day = active_program_data[st.session_state["selected_day_idx"]]
 
 # -------------------------------------------------------------
-# VISTA: WORKOUT
+# 2. CABECERA MARCHON (TODAY + PROGRAMAS + SUBTABS)
+# -------------------------------------------------------------
+st.markdown(f"""
+<div style="margin-top: 0.3rem; margin-bottom: 0.6rem;">
+    <div style="font-size: 0.85rem; color: #9CA3AF; font-weight: 600;">Today {current_day.date_num} Sep 2026</div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.1rem; margin-bottom: 0.8rem;">
+        <div style="display: flex; gap: 1rem; align-items: baseline;">
+            <span style="color: #FFFFFF; font-size: 1.5rem; font-weight: 900; letter-spacing: -0.5px;">PERFORM</span>
+            <span style="color: #4B5563; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.5px;">HYROX</span>
+        </div>
+        <div style="color: #6B7280; font-size: 1.5rem; font-weight: 300;">+</div>
+    </div>
+    <div class="marchon-subtabs">
+        <span class="subtab-active">Workout</span>
+        <span class="subtab-inactive">Coach Video</span>
+        <span class="subtab-inactive">Daily Mobility</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# -------------------------------------------------------------
+# VISTA: WORKOUT CON EJERCICIOS INDIVIDUALMENTE COLAPSABLES
 # -------------------------------------------------------------
 if st.session_state["current_view"] == "workout":
-    render_top_bar(program_name=f"{active_program_title} • {current_wave['name'].split(':')[0]}", streak_days=4 + get_completed_sessions_count())
-    
-    current_day = active_program_data[st.session_state["selected_day_idx"]]
-
     sets_to_save = []
 
     if current_day.is_rest_day:
         st.markdown(
-            '<div class="marchon-card" style="text-align: center; padding: 2rem 1rem;">'
+            '<div style="background: #161922; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; text-align: center; padding: 2.5rem 1rem;">'
             '<h4 style="color: white; font-weight: 900; text-transform: uppercase;">DESCANSO TOTAL & REGENERACIÓN</h4>'
             '<p style="color: #9CA3AF; font-size: 0.85rem; margin-top: 0.4rem;">Prioriza 8 horas de sueño, nutrición limpia y sesión de sauna.</p>'
             '</div>',
             unsafe_allow_html=True
         )
     else:
-        for block in current_day.blocks:
+        # Recorrer cada bloque de la sesión
+        for b_idx, block in enumerate(current_day.blocks):
             badge_class = "block-badge-accent" if block.code == "W" else "block-badge-circle"
+            
+            # Cabecera del Bloque
             st.markdown(f"""
-            <div style="display: flex; align-items: center; margin-top: 14px; margin-bottom: 6px;">
+            <div style="display: flex; align-items: center; margin-top: 18px; margin-bottom: 8px;">
                 <span class="{badge_class}">{block.code}</span>
-                <span style="color: white; font-weight: 800; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.3px;">{block.title}</span>
+                <span style="color: white; font-weight: 900; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.3px;">{block.title}</span>
             </div>
             """, unsafe_allow_html=True)
 
             if block.rest_block_desc:
                 st.markdown(f"<div style='color: #9CA3AF; font-size: 0.72rem; margin-bottom: 8px; text-transform: uppercase;'>PAUTA DE DESCANSO: {block.rest_block_desc}</div>", unsafe_allow_html=True)
 
-            for ex in block.exercises:
+            # Recorrer cada ejercicio individual como tarjeta colapsable
+            for e_idx, ex in enumerate(block.exercises):
                 if block.code == "R":
                     paces = calculate_running_10k_paces(st.session_state["target_10k_time"])
-                    st.markdown(
-                        f'<div class="marchon-card" style="border-left: 2px solid #10B981;">'
-                        f'<div style="color: white; font-weight: 700; font-size: 0.92rem;">{ex.name}</div>'
-                        f'<div style="color: #10B981; font-size: 0.8rem; font-weight: 700; margin-top: 2px;">RITMO SAN SILVESTRE: {paces["intervals_1000m"]}</div>'
-                        f'<div style="color: #9CA3AF; font-size: 0.72rem; margin-top: 2px;">{ex.notes if ex.notes else ex.target} • {ex.rest_description}</div>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
+                    with st.expander(f"{ex.name}  •  {ex.target}", expanded=True):
+                        st.markdown(
+                            f'<div style="color: #10B981; font-weight: 800; font-size: 0.88rem; margin-bottom: 4px;">RITMO SAN SILVESTRE: {paces["intervals_1000m"]}</div>'
+                            f'<div style="color: #9CA3AF; font-size: 0.78rem;">{ex.notes if ex.notes else ex.target} • {ex.rest_description}</div>',
+                            unsafe_allow_html=True
+                        )
                 elif block.code in ["S", "H"] and (ex.exercise_key or ex.intensity_pct or ex.default_weight):
                     base_1rm = user_1rms.get(ex.exercise_key, 100.0) if ex.exercise_key else 100.0
                     num_sets = current_wave["sets"] if block.code == "S" else (ex.target_sets or 3)
                     default_reps = current_wave["reps"] if block.code == "S" else (ex.target_reps or 10)
                     pct_wave = current_wave["pct_wave"]
 
-                    st.markdown(
-                        f'<div class="marchon-card">'
-                        f'<div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">'
-                        f'<div><span style="color: white; font-weight: 800; font-size: 0.95rem;">{ex.name}</span>'
-                        f'<span style="background: #242936; color: #10B981; font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.4rem; border-radius: 4px; margin-left: 0.4rem;">{ex.rest_description}</span></div>'
-                        f'<span style="color: #9CA3AF; font-size: 0.72rem;">1RM: <b style="color: #FF5722;">{base_1rm} kg</b></span>'
-                        f'</div>'
-                        f'<div style="color: #9CA3AF; font-size: 0.72rem; margin-bottom: 8px;">• {ex.notes if ex.notes else ex.target}</div>',
-                        unsafe_allow_html=True
-                    )
+                    # TÍTULO DEL EXPANDER DEL EJERCICIO (Expandido por defecto solo el primero de cada bloque)
+                    expander_title = f"{ex.name}  •  {ex.target}"
+                    
+                    with st.expander(expander_title, expanded=(b_idx == 0 and e_idx == 0)):
+                        st.markdown(
+                            f'<div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">'
+                            f'<span style="color: #9CA3AF; font-size: 0.78rem;">1RM Base: <b style="color: #FF5722;">{base_1rm} kg</b> | {ex.rest_description}</span>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+                        if ex.notes:
+                            st.markdown(f"<div style='color: #9CA3AF; font-size: 0.75rem; margin-bottom: 10px;'>• {ex.notes}</div>", unsafe_allow_html=True)
 
-                    for s_num in range(1, num_sets + 1):
-                        default_pct = pct_wave[s_num - 1] if (block.code=="S" and s_num <= len(pct_wave)) else (ex.intensity_pct*100 if ex.intensity_pct else 75.0)
-                        calc_weight = calculate_target_weight(base_1rm, default_pct / 100.0) if ex.exercise_key else (ex.default_weight or 20.0)
+                        # Formulario de Series dentro del Ejercicio
+                        for s_num in range(1, num_sets + 1):
+                            default_pct = pct_wave[s_num - 1] if (block.code=="S" and s_num <= len(pct_wave)) else (ex.intensity_pct*100 if ex.intensity_pct else 75.0)
+                            calc_weight = calculate_target_weight(base_1rm, default_pct / 100.0) if ex.exercise_key else (ex.default_weight or 20.0)
 
-                        st.markdown(f"""
-                        <div class="mobile-set-box">
-                            <div class="mobile-set-header">
-                                <div>
-                                    <b style="color: white; font-size: 0.82rem;">SERIE #{s_num}</b>
-                                    <span class="badge-tag" style="margin-left: 0.3rem;">{default_pct}% 1RM</span>
-                                </div>
-                                <div>
-                                    <span style="color: #10B981; font-weight: 800; font-size: 0.8rem;">SUGERIDO: {calc_weight} KG</span>
+                            st.markdown(f"""
+                            <div class="mobile-set-box">
+                                <div class="mobile-set-header">
+                                    <div>
+                                        <b style="color: white; font-size: 0.82rem;">SERIE #{s_num}</b>
+                                        <span class="badge-tag" style="margin-left: 0.3rem;">{default_pct}% 1RM</span>
+                                    </div>
+                                    <div>
+                                        <span style="color: #10B981; font-weight: 800; font-size: 0.8rem;">SUGERIDO: {calc_weight} KG</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                            """, unsafe_allow_html=True)
 
-                        c_w, c_r, c_rpe = st.columns([1.4, 1.2, 1.4])
-                        with c_w:
-                            s_w = st.number_input("Peso (kg)", min_value=0.0, value=calc_weight, step=2.5, key=f"mw_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
-                        with c_r:
-                            s_r = st.number_input("Reps", min_value=1, max_value=30, value=default_reps, step=1, key=f"mr_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
-                        with c_rpe:
-                            s_rpe = st.selectbox("RPE", [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0], index=4, key=f"mrpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
-                        
-                        est_1rm = calculate_estimated_1rm(s_w, s_r)
-                        st.markdown(f"<div style='text-align: right; color: #9CA3AF; font-size: 0.7rem; margin-top: -8px; margin-bottom: 6px;'>1RM ESTIMADO: <b style='color: #10B981;'>{est_1rm} KG</b></div>", unsafe_allow_html=True)
+                            c_w, c_r, c_rpe = st.columns([1.4, 1.2, 1.4])
+                            with c_w:
+                                s_w = st.number_input("Peso (kg)", min_value=0.0, value=calc_weight, step=2.5, key=f"mw_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
+                            with c_r:
+                                s_r = st.number_input("Reps", min_value=1, max_value=30, value=default_reps, step=1, key=f"mr_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
+                            with c_rpe:
+                                s_rpe = st.selectbox("RPE", [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0], index=4, key=f"mrpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
+                            
+                            est_1rm = calculate_estimated_1rm(s_w, s_r)
+                            st.markdown(f"<div style='text-align: right; color: #9CA3AF; font-size: 0.7rem; margin-top: -8px; margin-bottom: 6px;'>1RM ESTIMADO: <b style='color: #10B981;'>{est_1rm} KG</b></div>", unsafe_allow_html=True)
 
-                        sets_to_save.append({
-                            "exercise_name": ex.name, "set_num": s_num, "pct_1rm": default_pct,
-                            "weight": s_w, "reps": s_r, "rpe": s_rpe, "est_1rm": est_1rm
-                        })
+                            sets_to_save.append({
+                                "exercise_name": ex.name, "set_num": s_num, "pct_1rm": default_pct,
+                                "weight": s_w, "reps": s_r, "rpe": s_rpe, "est_1rm": est_1rm
+                            })
 
-                    rest_mins = (ex.rest_seconds or 120) // 60
-                    rest_secs = (ex.rest_seconds or 120) % 60
-                    if st.button(f"INICIAR DESCANSO ({rest_mins}:{rest_secs:02d})", key=f"btn_t_{ex.name}", use_container_width=True):
-                        with st.spinner(f"Descansando {ex.rest_description}..."):
-                            time.sleep(2)
-                            st.toast(f"Tiempo cumplido: {ex.rest_description}")
-
-                    st.markdown('</div>', unsafe_allow_html=True)
+                        rest_mins = (ex.rest_seconds or 120) // 60
+                        rest_secs = (ex.rest_seconds or 120) % 60
+                        if st.button(f"INICIAR DESCANSO ({rest_mins}:{rest_secs:02d})", key=f"btn_t_{ex.name}", use_container_width=True):
+                            with st.spinner(f"Descansando {ex.rest_description}..."):
+                                time.sleep(2)
+                                st.toast(f"Tiempo cumplido: {ex.rest_description}")
                 else:
-                    notes_with_rest = f"{ex.notes} • {ex.rest_description}" if ex.notes else ex.rest_description
-                    render_exercise_item(name=ex.name, target=ex.target, notes=notes_with_rest)
+                    # Ejercicios de Warm Up o accesorios simples
+                    with st.expander(f"{ex.name}  •  {ex.target}", expanded=False):
+                        notes_with_rest = f"{ex.notes} • {ex.rest_description}" if ex.notes else ex.rest_description
+                        st.markdown(f"<div style='color: #9CA3AF; font-size: 0.8rem;'>{notes_with_rest}</div>", unsafe_allow_html=True)
 
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
         sauna_done = st.checkbox("Sauna seca realizada hoy (20-30 min)", key="sauna_check")
 
         if st.button("GUARDAR SESIÓN", use_container_width=True, type="primary"):
@@ -189,12 +218,11 @@ if st.session_state["current_view"] == "workout":
 # -------------------------------------------------------------
 elif st.session_state["current_view"] == "home":
     st.markdown("<h3 style='color: white; font-weight: 900; text-transform: uppercase;'>Panel de Control</h3>", unsafe_allow_html=True)
-    
     total_sessions = 3 + get_completed_sessions_count()
     render_phase_snapshot(sessions=total_sessions, pbs=2, total_time=f"{total_sessions * 55 // 60}h {total_sessions * 55 % 60}m")
     
     st.markdown("""
-    <div class="marchon-card">
+    <div style="background: #161922; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1rem; margin-top: 1rem;">
         <div style="font-size: 0.9rem; font-weight: 800; color: white; margin-bottom: 0.2rem; text-transform: uppercase;">Estado de Recuperación (Readiness)</div>
         <div style="font-size: 0.72rem; color: #9CA3AF; margin-bottom: 0.5rem;">Autorregulación biológica</div>
     </div>
@@ -216,7 +244,7 @@ elif st.session_state["current_view"] == "programs":
         is_current = (prog.id == st.session_state["active_program_id"])
         tags_str = "".join([f'<span class="badge-tag">{t}</span>' for t in prog.tags])
         st.markdown(f"""
-        <div class="marchon-card">
+        <div style="background: #161922; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1rem; margin-bottom: 0.8rem;">
             <span class="badge-kpi">{prog.category}</span>
             <h4 style="color: white; margin: 0.3rem 0; font-weight: 800;">{prog.title}</h4>
             <p style="color: #9CA3AF; font-size: 0.82rem; margin-bottom: 0.5rem;">{prog.description}</p>
@@ -243,7 +271,7 @@ elif st.session_state["current_view"] == "kpis":
     render_kpi_table(kpis_data)
 
 # -------------------------------------------------------------
-# VISTA: ACCOUNT / 1RMs
+# VISTA: ACCOUNT
 # -------------------------------------------------------------
 elif st.session_state["current_view"] == "account":
     st.markdown("<h3 style='color: white; font-weight: 900; text-transform: uppercase;'>Perfil de Marcas 1RM</h3>", unsafe_allow_html=True)
