@@ -27,11 +27,10 @@ st.set_page_config(
 apply_custom_styles()
 
 # -------------------------------------------------------------
-# BARRERA DE SEGURIDAD (PIN AUTH)
+# BARRERA DE SEGURIDAD (PIN AUTH: 6367)
 # -------------------------------------------------------------
-# Cambia "1234" por el PIN personal que prefieras
-if not check_pin_auth(default_pin="1234"):
-    st.stop()  # Detiene la app si no se introduce el PIN correcto
+if not check_pin_auth(default_pin="6367"):
+    st.stop()
 
 user_1rms = get_all_user_1rms()
 

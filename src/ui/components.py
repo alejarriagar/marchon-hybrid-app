@@ -1,6 +1,6 @@
 ﻿import streamlit as st
 
-def check_pin_auth(default_pin="1234") -> bool:
+def check_pin_auth(default_pin="6367") -> bool:
     """Pantalla de bloqueo por PIN con estética Marchon"""
     if st.session_state.get("authenticated", False):
         return True
@@ -17,10 +17,9 @@ def check_pin_auth(default_pin="1234") -> bool:
     with c2:
         st.markdown('<div class="marchon-card">', unsafe_allow_html=True)
         with st.form("pin_login_form"):
-            pin_input = st.text_input("PIN de Seguridad", type="password", placeholder="Introduce tu PIN (ej: 1234)", label_visibility="collapsed")
+            pin_input = st.text_input("PIN de Seguridad", type="password", placeholder="Introduce tu PIN", label_visibility="collapsed")
             submit = st.form_submit_button("🔓 DESBLOQUEAR SISTEMA", use_container_width=True)
             if submit:
-                # Comprobar PIN (por defecto 1234 o el configurado en secrets)
                 valid_pin = st.secrets.get("APP_PIN", default_pin) if hasattr(st, "secrets") and "APP_PIN" in st.secrets else default_pin
                 if pin_input == valid_pin:
                     st.session_state["authenticated"] = True
