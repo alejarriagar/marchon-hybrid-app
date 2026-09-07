@@ -1,5 +1,36 @@
 ﻿import streamlit as st
 
+def check_pin_auth(default_pin="1234") -> bool:
+    """Pantalla de bloqueo por PIN con estética Marchon"""
+    if st.session_state.get("authenticated", False):
+        return True
+
+    st.markdown("""
+    <div style="max-width: 420px; margin: 3.5rem auto 1rem auto; text-align: center;">
+        <div style="background: #FF5722; width: 50px; height: 50px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; color: white; font-size: 1.6rem; margin-bottom: 1rem; box-shadow: 0 4px 20px rgba(255, 87, 34, 0.4);">M</div>
+        <h2 style="color: white; font-weight: 800; margin-bottom: 0.2rem;">MARCHON Hybrid OS</h2>
+        <p style="color: #9CA3AF; font-size: 0.85rem;">Introduce tu PIN de atleta para desbloquear tus métricas</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns([1, 1.8, 1])
+    with c2:
+        st.markdown('<div class="marchon-card">', unsafe_allow_html=True)
+        with st.form("pin_login_form"):
+            pin_input = st.text_input("PIN de Seguridad", type="password", placeholder="Introduce tu PIN (ej: 1234)", label_visibility="collapsed")
+            submit = st.form_submit_button("🔓 DESBLOQUEAR SISTEMA", use_container_width=True)
+            if submit:
+                # Comprobar PIN (por defecto 1234 o el configurado en secrets)
+                valid_pin = st.secrets.get("APP_PIN", default_pin) if hasattr(st, "secrets") and "APP_PIN" in st.secrets else default_pin
+                if pin_input == valid_pin:
+                    st.session_state["authenticated"] = True
+                    st.toast("¡Acceso concedido! Cargando plan...")
+                    st.rerun()
+                else:
+                    st.error("PIN incorrecto. Inténtalo de nuevo.")
+        st.markdown('</div>', unsafe_allow_html=True)
+    return False
+
 def render_top_bar(program_name="PERFORM • Fase 1 (Septiembre)", streak_days=4):
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:

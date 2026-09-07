@@ -3,7 +3,10 @@ import time
 import pandas as pd
 import plotly.express as px
 from src.ui.styles import apply_custom_styles
-from src.ui.components import render_top_bar, render_phase_snapshot, render_kpi_table, render_exercise_item
+from src.ui.components import (
+    check_pin_auth, render_top_bar, render_phase_snapshot, 
+    render_kpi_table, render_exercise_item
+)
 from src.database.repository import (
     init_db, save_full_session_log, get_completed_sessions_count, 
     get_all_user_1rms, update_user_1rm, get_recent_workout_history,
@@ -22,6 +25,13 @@ st.set_page_config(
 )
 
 apply_custom_styles()
+
+# -------------------------------------------------------------
+# BARRERA DE SEGURIDAD (PIN AUTH)
+# -------------------------------------------------------------
+# Cambia "1234" por el PIN personal que prefieras
+if not check_pin_auth(default_pin="1234"):
+    st.stop()  # Detiene la app si no se introduce el PIN correcto
 
 user_1rms = get_all_user_1rms()
 
@@ -66,7 +76,7 @@ with nav_c5:
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# VISTA 1: PLAN SEMANAL CON READINESS INTEGRADO
+# VISTA 1: PLAN SEMANAL
 # -------------------------------------------------------------
 if st.session_state["current_view"] == "plan":
     w_col1, w_col2, w_col3, w_col4 = st.columns(4)
@@ -236,7 +246,6 @@ if st.session_state["current_view"] == "plan":
                 st.rerun()
 
     with col_sidebar:
-        # 1. Widget de Readiness Diario
         st.markdown("""
         <div class="marchon-card" style="margin-bottom: 1rem;">
             <div style="font-size: 0.95rem; font-weight: 800; color: white; margin-bottom: 0.3rem;">⚡ Daily Readiness & Recuperación</div>
@@ -266,11 +275,9 @@ if st.session_state["current_view"] == "plan":
         </div>
         """, unsafe_allow_html=True)
 
-        # 2. Phase Snapshot
         total_sessions = 3 + get_completed_sessions_count()
         render_phase_snapshot(sessions=total_sessions, pbs=2, total_time=f"{total_sessions * 55 // 60}h {total_sessions * 55 % 60}m")
         
-        # 3. Tabla de KPIs
         kpis_data = [
             {"name": "Bench Press", "metric": "1RM Actual", "baseline": f"{user_1rms.get('bench_press', 120)*0.95:.1f} kg", "retest": f"{user_1rms.get('bench_press', 120)} kg", "delta": "+5.2%"},
             {"name": "Back Squat", "metric": "1RM Actual", "baseline": "135 kg", "retest": f"{user_1rms.get('back_squat', 140)} kg", "delta": "+3.7%"},
@@ -279,7 +286,6 @@ if st.session_state["current_view"] == "plan":
         ]
         render_kpi_table(kpis_data)
         
-        # 4. Sauna
         st.markdown(
             '<div class="marchon-card" style="margin-top: 1.5rem;">'
             '<div style="font-size: 1rem; font-weight: 700; color: white; margin-bottom: 0.3rem;">🧖 Protocolo Sauna & Recuperación</div>'
@@ -366,7 +372,6 @@ elif st.session_state["current_view"] == "history":
     st.markdown("<h2 style='color: white; font-weight: 800;'>📜 Historial de Sesiones & Base de Datos</h2>", unsafe_allow_html=True)
     st.markdown("<p style='color: #9CA3AF;'>Registro inmutable de todas las series guardadas en tu base de datos local SQLite.</p>", unsafe_allow_html=True)
 
-    # Asistente de Transición de Mes (Septiembre -> Octubre)
     st.markdown("""
     <div class="marchon-card" style="border: 1px solid #10B981; background: rgba(16, 185, 129, 0.05); margin-bottom: 1.5rem;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -404,7 +409,6 @@ elif st.session_state["current_view"] == "history":
 
     st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True)
     
-    # Exportador a CSV
     df_export = export_all_logs_dataframe()
     if not df_export.empty:
         csv_data = df_export.to_csv(index=False).encode('utf-8')
@@ -439,10 +443,10 @@ elif st.session_state["current_view"] == "history":
             """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# VISTA 5: PANEL DE GESTIÓN DE 1RMs Y RITMOS SAN SILVESTRE
+# VISTA 5: PANEL DE GESTIÓN DE 1RMs Y SEGURIDAD
 # -------------------------------------------------------------
 elif st.session_state["current_view"] == "settings_1rm":
-    st.markdown("<h2 style='color: white; font-weight: 800;'>⚙️ Gestión de Marcas 1RM & Ritmos San Silvestre</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: white; font-weight: 800;'>⚙️ Gestión de Marcas 1RM & Seguridad</h2>", unsafe_allow_html=True)
     st.markdown("<p style='color: #9CA3AF;'>Personaliza tu perfil de atleta. Las cargas del gimnasio y los ritmos de carrera se sincronizan en tiempo real.</p>", unsafe_allow_html=True)
 
     c1, c2 = st.columns(2)
@@ -478,11 +482,17 @@ elif st.session_state["current_view"] == "settings_1rm":
         """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.button("💾 GUARDAR TODOS LOS PARÁMETROS", use_container_width=True):
-        update_user_1rm("bench_press", new_bench)
-        update_user_1rm("ohp", new_ohp)
-        update_user_1rm("back_squat", new_squat)
-        update_user_1rm("deadlift", new_deadlift)
-        st.success("¡Perfil y marcas actualizadas! Plan totalmente sincronizado.")
-        time.sleep(1)
-        st.rerun()
+    c_b1, c_b2 = st.columns([3, 1])
+    with c_b1:
+        if st.button("💾 GUARDAR TODOS LOS PARÁMETROS", use_container_width=True):
+            update_user_1rm("bench_press", new_bench)
+            update_user_1rm("ohp", new_ohp)
+            update_user_1rm("back_squat", new_squat)
+            update_user_1rm("deadlift", new_deadlift)
+            st.success("¡Perfil y marcas actualizadas! Plan totalmente sincronizado.")
+            time.sleep(1)
+            st.rerun()
+    with c_b2:
+        if st.button("🔒 CERRAR SESIÓN", use_container_width=True):
+            st.session_state["authenticated"] = False
+            st.rerun()
