@@ -1,26 +1,23 @@
 ﻿import streamlit as st
 
 def check_pin_auth(default_pin="6367") -> bool:
-    """Pantalla de bloqueo por PIN con estética Marchon (Blindada contra errores de secretos)"""
     if st.session_state.get("authenticated", False):
         return True
 
-    st.markdown("""
-    <div style="max-width: 420px; margin: 3.5rem auto 1rem auto; text-align: center;">
-        <div style="background: #FF5722; width: 50px; height: 50px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; color: white; font-size: 1.6rem; margin-bottom: 1rem; box-shadow: 0 4px 20px rgba(255, 87, 34, 0.4);">M</div>
-        <h2 style="color: white; font-weight: 800; margin-bottom: 0.2rem;">MARCHON Hybrid OS</h2>
-        <p style="color: #9CA3AF; font-size: 0.85rem;">Introduce tu PIN de atleta para desbloquear tus métricas</p>
-    </div>
-    """, unsafe_allow_html=True)
+    _, col_center, _ = st.columns([1, 1.6, 1])
+    with col_center:
+        st.markdown("""
+        <div style="text-align: center; margin-top: 3.5rem; margin-bottom: 1.5rem;">
+            <div style="background: #FF5722; width: 54px; height: 54px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; color: white; font-size: 1.8rem; box-shadow: 0 4px 20px rgba(255, 87, 34, 0.4);">M</div>
+            <h2 style="color: white; font-weight: 800; margin-top: 0.8rem; margin-bottom: 0.2rem;">MARCHON Hybrid OS</h2>
+            <p style="color: #9CA3AF; font-size: 0.85rem;">Introduce tu PIN de atleta para desbloquear</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-    c1, c2, c3 = st.columns([1, 1.8, 1])
-    with c2:
-        st.markdown('<div class="marchon-card">', unsafe_allow_html=True)
         with st.form("pin_login_form"):
             pin_input = st.text_input("PIN de Seguridad", type="password", placeholder="Introduce tu PIN", label_visibility="collapsed")
             submit = st.form_submit_button("🔓 DESBLOQUEAR SISTEMA", use_container_width=True)
             if submit:
-                # Lectura 100% segura del PIN
                 valid_pin = default_pin
                 try:
                     if hasattr(st, "secrets") and "APP_PIN" in st.secrets:
@@ -30,32 +27,26 @@ def check_pin_auth(default_pin="6367") -> bool:
 
                 if pin_input == valid_pin:
                     st.session_state["authenticated"] = True
-                    st.toast("¡Acceso concedido! Cargando plan...")
                     st.rerun()
                 else:
                     st.error("PIN incorrecto. Inténtalo de nuevo.")
-        st.markdown('</div>', unsafe_allow_html=True)
     return False
 
-def render_top_bar(program_name="PERFORM • Fase 1 (Septiembre)", streak_days=4):
-    col1, col2, col3 = st.columns([2, 1, 1])
+def render_top_bar(program_name="PERFORM", streak_days=4):
+    col1, col2 = st.columns([3, 1])
     with col1:
         st.markdown(f"""
-<div style="display: flex; align-items: center; gap: 0.8rem;">
-    <div style="background: #FF5722; width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: white;">M</div>
-    <div>
-        <div style="font-size: 0.75rem; color: #9CA3AF; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Programa Activo</div>
-        <div style="font-size: 1.1rem; font-weight: 800; color: white;">{program_name}</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-    with col3:
+        <div style="margin-bottom: 0.4rem;">
+            <div style="font-size: 0.75rem; color: #9CA3AF; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Septiembre 2026</div>
+            <div style="font-size: 1.4rem; font-weight: 900; color: white; letter-spacing: -0.5px;">{program_name}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
         st.markdown(f"""
-<div style="text-align: right; background: #161922; padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); display: inline-block; float: right;">
-    <span style="color: #F59E0B; font-weight: 800; font-size: 1rem;">⚡ {streak_days}</span>
-    <span style="color: #9CA3AF; font-size: 0.8rem; font-weight: 600; margin-left: 0.2rem;">días racha</span>
-</div>
-""", unsafe_allow_html=True)
+        <div style="text-align: right; margin-top: 5px;">
+            <span style="background: #161922; border: 1px solid rgba(255,255,255,0.08); padding: 0.35rem 0.6rem; border-radius: 8px; color: #F59E0B; font-weight: 800; font-size: 0.85rem;">⚡ {streak_days} días</span>
+        </div>
+        """, unsafe_allow_html=True)
 
 def render_phase_snapshot(sessions=3, pbs=2, total_time="3h 33m"):
     st.markdown('<div style="font-size: 1.1rem; font-weight: 800; color: white; margin-bottom: 0.75rem;">Phase Snapshot</div>', unsafe_allow_html=True)

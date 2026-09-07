@@ -3,7 +3,7 @@
 def apply_custom_styles():
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -11,28 +11,66 @@ def apply_custom_styles():
 
     .stApp {
         background-color: #0E1117;
+        padding-bottom: 80px; /* Espacio para que el bottom bar no tape contenido */
     }
 
-    div[data-testid="stForm"] {
+    /* Ocultar barra nativa superior */
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+    }
+
+    /* Calendario Superior Marchon */
+    .cal-ribbon {
+        display: flex;
+        justify-content: space-between;
         background: #161922;
+        border-radius: 16px;
+        padding: 0.5rem 0.4rem;
+        margin-bottom: 1rem;
         border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 14px;
-        padding: 1.25rem;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
     }
 
+    /* Badges Circulares de Bloques (⚡, A, B, C) */
+    .block-badge-circle {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: #FFFFFF;
+        color: #0E1117;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        font-size: 0.8rem;
+        margin-right: 0.5rem;
+    }
+
+    .block-badge-zap {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: #FF5722;
+        color: #FFFFFF;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        font-size: 0.85rem;
+        margin-right: 0.5rem;
+    }
+
+    /* Tarjetas de ejercicios */
     .marchon-card {
         background: #161922;
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 14px;
-        padding: 1rem;
+        padding: 1.1rem;
         margin-bottom: 0.8rem;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     }
 
-    /* Tarjeta de Serie para Móvil */
     .mobile-set-box {
-        background: #191D26;
+        background: #1D222E;
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 10px;
         padding: 0.75rem 0.85rem;
@@ -51,12 +89,11 @@ def apply_custom_styles():
     .badge-kpi {
         background-color: #FF5722;
         color: white;
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         font-weight: 700;
         padding: 0.2rem 0.5rem;
         border-radius: 4px;
         display: inline-block;
-        letter-spacing: 0.5px;
     }
 
     .badge-tag {
@@ -83,7 +120,7 @@ def apply_custom_styles():
     .exercise-row {
         background: #1D222E;
         border-radius: 8px;
-        padding: 0.6rem 0.8rem;
+        padding: 0.65rem 0.85rem;
         margin-bottom: 0.4rem;
         display: flex;
         justify-content: space-between;
@@ -93,8 +130,8 @@ def apply_custom_styles():
 
     .exercise-name {
         color: #F3F4F6;
-        font-weight: 500;
-        font-size: 0.88rem;
+        font-weight: 600;
+        font-size: 0.9rem;
     }
 
     .exercise-reps {
@@ -103,32 +140,14 @@ def apply_custom_styles():
         font-size: 0.82rem;
     }
 
-    .stat-box {
-        background: #1D222E;
-        border-radius: 10px;
-        padding: 0.6rem;
-        text-align: center;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    .stat-value {
-        font-size: 1.3rem;
-        font-weight: 800;
-        color: #FFFFFF;
-    }
-    .stat-label {
-        font-size: 0.7rem;
-        color: #9CA3AF;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
+    /* Botones táctiles */
     div.stButton > button {
         background-color: #242936;
         color: white;
         border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        font-weight: 600;
-        min-height: 42px;
+        border-radius: 10px;
+        font-weight: 700;
+        min-height: 44px;
         transition: all 0.2s ease;
     }
     div.stButton > button:hover {
