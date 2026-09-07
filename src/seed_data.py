@@ -1,23 +1,24 @@
 ﻿from src.models.workout import DayWorkout, WorkoutBlock, Exercise, Program
 
+# FASE 1: SEPTIEMBRE (4 DÍAS GYM + 2 RUNNING 10K + BICI + SAUNA)
 SEPTEMBER_PROGRAM = [
     DayWorkout(
-        day_id="lun_sep", day_name="Lun", date_num="7", type_badge="Upper Fuerza",
-        title="Upper Body: Push & Pull (Fuerza & Armadura)",
-        tags=["Hybrid", "Strength & Power"], kpis=["Barbell Bench Press", "Weighted Pull-up"],
+        day_id="lun_sep", day_name="Lun", date_num="7", type_badge="Gym 1: Torso A",
+        title="Upper Body A: Push & Pull (Fuerza & Cuidado de Brazo)",
+        tags=["Gym", "Fuerza", "Bench Press"], kpis=["Barbell Bench Press"],
         blocks=[
             WorkoutBlock(
-                code="W", title="WARM UP", subtitle="2 Rondas por calidad",
-                rest_block_desc="Sin descanso entre ejercicios • 30s entre rondas",
+                code="W", title="WARM UP", subtitle="2 Rondas continuas por calidad",
+                rest_block_desc="Sin descanso entre ejercicios",
                 exercises=[
-                    Exercise(name="SkiErg / Rower", target="1 min a ritmo constante", rest_seconds=0, rest_description="Transición directa"),
-                    Exercise(name="Band Pull-aparts + Scapular Push-ups", target="15 + 10 reps", rest_seconds=0, rest_description="Transición directa"),
-                    Exercise(name="Deadbugs con control pélvico", target="10 e/s", rest_seconds=30, rest_description="30s al terminar la ronda")
+                    Exercise(name="SkiErg / Rower suave", target="1 min a ritmo constante", rest_seconds=0, rest_description="Fluido"),
+                    Exercise(name="Band Pull-aparts + Scapular Push-ups", target="15 + 10 reps", rest_seconds=0, rest_description="Fluido"),
+                    Exercise(name="Deadbugs con control pélvico", target="10 e/s", rest_seconds=30, rest_description="30s descanso")
                 ]
             ),
             WorkoutBlock(
                 code="S", title="PRIMARY STRENGTH (% 1RM WAVE)", subtitle="Semana 1: Onda 72.5% - 80% 1RM • RPE 8",
-                rest_block_desc="Descanso estricto: 2:30 min entre series para máxima potencia",
+                rest_block_desc="Descanso estricto: 2:30 min entre series",
                 exercises=[
                     Exercise(
                         name="Barbell Bench Press",
@@ -27,67 +28,66 @@ SEPTEMBER_PROGRAM = [
                         target_reps=5,
                         target="4 x 5 @ 72.5% - 80% 1RM (RPE 8)",
                         rest_seconds=150,
-                        rest_description="2:30 min descanso completo",
-                        notes="Pausa de 1 segundo en el pecho. Velocidad concéntrica máxima."
+                        rest_description="2:30 min descanso",
+                        notes="Pausa de 1 segundo en el pecho. Agarre firme sin hiperextender muñecas."
                     ),
                     Exercise(
-                        name="Weighted Pull-ups (o Chin-ups)",
-                        exercise_key="pull_up",
-                        intensity_pct=0.75,
+                        name="Chest-Supported T-Bar / DB Row (Protección de brazo)",
+                        default_weight=32.5,
                         target_sets=4,
-                        target_reps=5,
-                        target="4 x 5 @ 70% - 77.5% 1RM",
+                        target_reps=6,
+                        target="4 x 6 reps pesadas (RPE 8)",
                         rest_seconds=120,
                         rest_description="2:00 min descanso",
-                        notes="Extensión completa abajo y barbilla claramente sobre la barra."
+                        notes="Apoyo en banco para eliminar tensión lumbar y usar agarre neutro que no fuerce el brazo."
                     )
                 ]
             ),
             WorkoutBlock(
                 code="H", title="FUNCTIONAL HYPERTROPHY", subtitle="Triserie • RIR 2 • 3 Rondas",
-                rest_block_desc="90 segundos de descanso tras completar los 3 ejercicios seguidos",
+                rest_block_desc="90 segundos de descanso tras completar la triserie",
                 exercises=[
-                    Exercise(name="Incline Dumbbell Press (Agarre Neutro)", target="3 x 8-10 reps", rest_seconds=0, rest_description="Sin descanso -> Pasar a C2"),
-                    Exercise(name="Chest-Supported Dumbbell Row (Pausa 1s)", target="3 x 10-12 reps", rest_seconds=0, rest_description="Sin descanso -> Pasar a C3"),
-                    Exercise(name="Face Pulls en polea + Rotadores externos", target="3 x 15 reps", rest_seconds=90, rest_description="90s descanso al finalizar la triserie")
+                    Exercise(name="Incline Dumbbell Press (Agarre Neutro 45°)", target="3 x 8-10 reps", rest_seconds=0, rest_description="Sin descanso -> H2"),
+                    Exercise(name="Neutral Grip Lat Pulldown (Jalón neutro en polea)", target="3 x 10-12 reps", rest_seconds=0, rest_description="Sin descanso -> H3"),
+                    Exercise(name="Face Pulls en polea + Rotadores externos", target="3 x 15 reps", rest_seconds=90, rest_description="90s descanso al finalizar")
                 ]
             ),
             WorkoutBlock(
-                code="E", title="PREHAB & ENGINE", subtitle="Fuerza de agarre y core",
+                code="E", title="PREHAB & CORE", subtitle="Anti-rotación y transporte",
                 rest_block_desc="60 segundos de descanso entre rondas",
                 exercises=[
-                    Exercise(name="Farmer's Walks pesados con mancuernas", target="3 x 40 metros", rest_seconds=45, rest_description="45s descanso"),
+                    Exercise(name="Farmer's Walks con mancuernas (peso moderado)", target="3 x 40 metros", rest_seconds=45, rest_description="45s descanso"),
                     Exercise(name="Pallof Press con banda / polea", target="3 x 12 e/s", rest_seconds=60, rest_description="60s descanso")
                 ]
             )
         ]
     ),
     DayWorkout(
-        day_id="mar_sep", day_name="Mar", date_num="8", type_badge="Run 10k Calidad",
+        day_id="mar_sep", day_name="Mar", date_num="8", type_badge="Run 10k Series",
         title="Running: Series San Silvestre 10k (Ritmo Umbral)",
         tags=["Running", "Threshold", "San Silvestre"], kpis=["Ritmo 1000m (Umbral)"],
         blocks=[
             WorkoutBlock(
                 code="W", title="CALENTAMIENTO & DRILLES", subtitle="Preparación tendinosa",
                 exercises=[
-                    Exercise(name="Trote suave Z1", target="10 minutos", rest_seconds=60, rest_description="1 min antes de drilles"),
-                    Exercise(name="Drills de técnica + Progresiones", target="3 rectas de 70m", rest_seconds=90, rest_description="90s antes de empezar series")
+                    Exercise(name="Trote suave Z1", target="10 minutos", rest_seconds=60, rest_description="1 min"),
+                    Exercise(name="Drills de técnica + Progresiones", target="3 rectas de 70m", rest_seconds=90, rest_description="90s")
                 ]
             ),
             WorkoutBlock(
                 code="R", title="BLOQUE PRINCIPAL 10K", subtitle="Ritmo objetivo San Silvestre",
-                rest_block_desc="Recuperación: 90s trote muy suave (Z1) entre cada 1000m",
+                rest_block_desc="Recuperación: 90s trote muy suave Z1 entre series de 1000m",
                 exercises=[
-                    Exercise(name="6 x 1000m a ritmo 10k", target="6 series", rest_seconds=90, rest_description="90s trote suave Z1", notes="Mantener ritmo uniforme en todas las series"),
+                    Exercise(name="6 x 1000m a ritmo objetivo 10k", target="6 series", rest_seconds=90, rest_description="90s trote suave Z1", notes="Mantener ritmo uniforme en todas las repeticiones"),
                     Exercise(name="Enfriamiento suave Z1", target="10 minutos", rest_seconds=0, rest_description="Fin de sesión")
                 ]
             )
         ]
     ),
     DayWorkout(
-        day_id="mie_sep", day_name="Mié", date_num="9", type_badge="Lower Squat",
-        title="Lower Body: Sentadilla & Rodilla Blindada",
-        tags=["Hybrid", "Legs", "Durability"], kpis=["Barbell Back Squat", "Trap Bar Deadlift"],
+        day_id="mie_sep", day_name="Mié", date_num="9", type_badge="Gym 2: Pierna A",
+        title="Lower Body A: Sentadilla, Cuádriceps & RDL",
+        tags=["Gym", "Fuerza", "Squat", "RDL"], kpis=["Barbell Back Squat"],
         blocks=[
             WorkoutBlock(
                 code="W", title="WARM UP & PREHAB", subtitle="Cadera y tobillos para carrera",
@@ -97,7 +97,7 @@ SEPTEMBER_PROGRAM = [
                 ]
             ),
             WorkoutBlock(
-                code="S", title="PRIMARY STRENGTH (% 1RM WAVE)", subtitle="Semana 1: Onda 75% - 82.5% 1RM",
+                code="S", title="PRIMARY STRENGTH (% 1RM WAVE)", subtitle="Semana 1: Onda 75% - 80% 1RM",
                 rest_block_desc="2:30 min de descanso entre series pesadas",
                 exercises=[
                     Exercise(
@@ -110,38 +110,27 @@ SEPTEMBER_PROGRAM = [
                         rest_seconds=150,
                         rest_description="2:30 min descanso",
                         notes="Profundidad paralela, tronco firme."
-                    ),
-                    Exercise(
-                        name="Trap Bar Deadlift",
-                        exercise_key="deadlift",
-                        intensity_pct=0.80,
-                        target_sets=3,
-                        target_reps=5,
-                        target="3 x 5 @ 77.5% - 82.5% 1RM (RPE 8)",
-                        rest_seconds=150,
-                        rest_description="2:30 min descanso",
-                        notes="Empuje potente desde el suelo."
                     )
                 ]
             ),
             WorkoutBlock(
-                code="H", title="UNILATERAL & TIBIALES", subtitle="Prevención de periostitis",
-                rest_block_desc="60 a 90 segundos entre ejercicios",
+                code="H", title="POSTERIOR & UNILATERAL", subtitle="Cadena posterior y prevención",
+                rest_block_desc="75 segundos de descanso",
                 exercises=[
+                    Exercise(name="Dumbbell Romanian Deadlift (RDL)", target="3 x 10 reps (RIR 2)", default_weight=30.0, rest_seconds=90, rest_description="90s descanso", notes="Bisagra pura de cadera estirando isquios"),
                     Exercise(name="Bulgarian Split Squat con mancuernas", target="3 x 8 e/s", rest_seconds=60, rest_description="60s entre piernas"),
-                    Exercise(name="Dumbbell Romanian Deadlift (RDL)", target="3 x 10 reps", rest_seconds=90, rest_description="90s descanso"),
-                    Exercise(name="Tibialis Raises en pared", target="2 x 20 reps", rest_seconds=45, rest_description="45s descanso")
+                    Exercise(name="Tibialis Raises en pared (Anti-periostitis)", target="2 x 20 reps", rest_seconds=45, rest_description="45s descanso")
                 ]
             )
         ]
     ),
     DayWorkout(
-        day_id="jue_sep", day_name="Jue", date_num="10", type_badge="Upper Hipertrofia",
-        title="Upper Body: Estructura, Hombros & Espalda Alta",
-        tags=["Physique", "Volume", "Upper"], kpis=["Overhead Press"],
+        day_id="jue_sep", day_name="Jue", date_num="10", type_badge="Gym 3: Torso B",
+        title="Upper Body B: Estructura, Hombros & Remos",
+        tags=["Gym", "Physique", "Overhead Press"], kpis=["Overhead Press"],
         blocks=[
             WorkoutBlock(
-                code="W", title="WARM UP", subtitle="Movilidad escapular",
+                code="W", title="WARM UP", subtitle="Movilidad escapular y manguito",
                 exercises=[Exercise(name="Kettlebell Halos + Rotaciones torácicas", target="2 x 8 e/s", rest_seconds=30, rest_description="30s descanso")]
             ),
             WorkoutBlock(
@@ -159,24 +148,59 @@ SEPTEMBER_PROGRAM = [
                         rest_description="2:00 min descanso",
                         notes="Glúteos y core compactados."
                     ),
-                    Exercise(name="Barbell Pendlay Row", target="4 x 6-8 reps", default_weight=75.0, rest_seconds=90, rest_description="90s descanso")
+                    Exercise(name="Barbell Pendlay Row (o Remo en Polea Neutro)", target="4 x 6-8 reps", default_weight=70.0, rest_seconds=90, rest_description="90s descanso")
                 ]
             ),
             WorkoutBlock(
-                code="H", title="VOLUME & ARMS", subtitle="Hipertrofia funcional",
-                rest_block_desc="75 segundos de descanso",
+                code="H", title="VOLUME & ARM SAFE", subtitle="Hipertrofia sin estrés articular",
+                rest_block_desc="60 a 75 segundos de descanso",
                 exercises=[
-                    Exercise(name="Neutral Grip DB Floor Press", target="3 x 10-12 reps", rest_seconds=75, rest_description="75s descanso"),
-                    Exercise(name="Single-Arm Cable Row", target="3 x 10 e/s", rest_seconds=60, rest_description="60s descanso"),
-                    Exercise(name="Biceps Barbell Curl + Triceps Rope", target="3 x 12 reps", rest_seconds=60, rest_description="60s descanso")
+                    Exercise(name="Neutral Grip DB Floor Press", target="3 x 10-12 reps", rest_seconds=75, rest_description="75s descanso", notes="El suelo limita el rango protegiendo hombro y codo"),
+                    Exercise(name="Single-Arm Cable Row (Enfoque Dorsal)", target="3 x 10 e/s", rest_seconds=60, rest_description="60s descanso"),
+                    Exercise(name="Dumbbell Lateral Raises (Elevaciones laterales)", target="3 x 15 reps", rest_seconds=60, rest_description="60s descanso")
                 ]
             )
         ]
     ),
     DayWorkout(
-        day_id="vie_sep", day_name="Vie", date_num="11", type_badge="Descanso",
-        title="Recuperación Total & Sauna",
-        tags=["Recovery", "Sauna", "Longevity"], is_rest_day=True, blocks=[]
+        day_id="vie_sep", day_name="Vie", date_num="11", type_badge="Gym 4: Pierna B",
+        title="Lower Body B: Deadlift Focus, Cadena Posterior & Glúteo",
+        tags=["Gym", "Fuerza", "Deadlift", "Cadena Posterior"], kpis=["Trap Bar Deadlift"],
+        blocks=[
+            WorkoutBlock(
+                code="W", title="WARM UP & HINGE PREP", subtitle="Activación de glúteos e isquios",
+                exercises=[
+                    Exercise(name="Glute Bridges con banda", target="2 x 15 reps", rest_seconds=0, rest_description="Fluido"),
+                    Exercise(name="Good Mornings con Kettlebell/Banda", target="2 x 10 reps", rest_seconds=30, rest_description="30s descanso")
+                ]
+            ),
+            WorkoutBlock(
+                code="S", title="PRIMARY STRENGTH (% 1RM WAVE)", subtitle="Semana 1: Onda 75% - 82.5% 1RM",
+                rest_block_desc="Descanso estricto: 2:30 min entre series de Peso Muerto",
+                exercises=[
+                    Exercise(
+                        name="Trap Bar Deadlift (o Peso Muerto Convencional)",
+                        exercise_key="deadlift",
+                        intensity_pct=0.80,
+                        target_sets=4,
+                        target_reps=5,
+                        target="4 x 5 @ 77.5% - 82.5% 1RM (RPE 8)",
+                        rest_seconds=150,
+                        rest_description="2:30 min descanso",
+                        notes="Empuje explosivo desde el suelo manteniendo columna neutra."
+                    )
+                ]
+            ),
+            WorkoutBlock(
+                code="H", title="POSTERIOR CHAIN POWER", subtitle="Glúteo, isquios y estabilidad",
+                rest_block_desc="75 segundos de descanso",
+                exercises=[
+                    Exercise(name="Barbell / DB Hip Thrust", target="3 x 10-12 reps", default_weight=90.0, rest_seconds=75, rest_description="75s descanso"),
+                    Exercise(name="Walking Lunges con mancuernas", target="3 x 10 pasos e/s", rest_seconds=60, rest_description="60s descanso"),
+                    Exercise(name="Hanging Knee / Leg Raises", target="3 x 12-15 reps", rest_seconds=60, rest_description="60s descanso")
+                ]
+            )
+        ]
     ),
     DayWorkout(
         day_id="sab_sep", day_name="Sáb", date_num="12", type_badge="Run 10k Tirada",
@@ -185,7 +209,7 @@ SEPTEMBER_PROGRAM = [
         blocks=[
             WorkoutBlock(
                 code="R", title="TIRADA AERÓBICA", subtitle="Base cardiovascular para la San Silvestre",
-                rest_block_desc="Carrera continua sin paradas",
+                rest_block_desc="Carrera continua",
                 exercises=[
                     Exercise(name="Primeros 6 km en Zona 2 conversacional", target="6 km Z2", rest_seconds=0, rest_description="Continuo"),
                     Exercise(name="Últimos 3 km a ritmo objetivo 10k", target="3 km ritmo carrera", rest_seconds=0, rest_description="Continuo")
@@ -194,19 +218,23 @@ SEPTEMBER_PROGRAM = [
         ]
     ),
     DayWorkout(
-        day_id="dom_sep", day_name="Dom", date_num="13", type_badge="Bici Zona 2",
-        title="Ciclismo: Capacidad Aeróbica de Bajo Impacto",
-        tags=["Cycling", "Zone 2", "Cardio"], kpis=[],
+        day_id="dom_sep", day_name="Dom", date_num="13", type_badge="Bici Z2 + Sauna",
+        title="Ciclismo: Fondo Aeróbico & Sauna de Regeneración",
+        tags=["Cycling", "Zone 2", "Sauna"], kpis=[],
         blocks=[
             WorkoutBlock(
-                code="B", title="FONDO EN BICI", subtitle="Recuperación activa y desarrollo mitocondrial",
-                rest_block_desc="Pedaleo continuo",
-                exercises=[Exercise(name="Salida en bicicleta de carretera / gravel", target="60-90 min Zona 2", rest_seconds=0, rest_description="Continuo")]
+                code="B", title="FONDO EN BICI & SAUNA", subtitle="Recuperación activa y desarrollo mitocondrial",
+                rest_block_desc="Pedaleo continuo + Sauna post-sesión",
+                exercises=[
+                    Exercise(name="Salida en bicicleta de carretera / gravel", target="60-90 min Zona 2", rest_seconds=0, rest_description="Continuo"),
+                    Exercise(name="Sauna Seca + Rehidratación con electrolitos", target="25-30 min", rest_seconds=0, rest_description="Regeneración total")
+                ]
             )
         ]
     )
 ]
 
+# FASE 2: OCTUBRE CON BJJ (3 DÍAS GYM + 2 DÍAS BJJ + 2 RUNNING + BICI)
 OCTOBER_BJJ_PROGRAM = [
     DayWorkout(
         day_id="lun_oct", day_name="Lun", date_num="5", type_badge="Gym + BJJ 19:30",
@@ -232,12 +260,11 @@ OCTOBER_BJJ_PROGRAM = [
                         rest_description="2:30 min descanso"
                     ),
                     Exercise(
-                        name="Weighted Chin-ups",
-                        exercise_key="pull_up",
-                        intensity_pct=0.75,
+                        name="Chest-Supported Row Pesado",
+                        default_weight=35.0,
                         target_sets=4,
-                        target_reps=5,
-                        target="4 x 5 @ 72.5% - 77.5% 1RM",
+                        target_reps=6,
+                        target="4 x 6 reps (RPE 8)",
                         rest_seconds=120,
                         rest_description="2:00 min descanso"
                     )
@@ -270,8 +297,8 @@ OCTOBER_BJJ_PROGRAM = [
     ),
     DayWorkout(
         day_id="mie_oct", day_name="Mié", date_num="7", type_badge="Lower Power",
-        title="Lower Body: Potencia & Resistencia Isquios (Anti-lesión)",
-        tags=["Hybrid", "Legs", "BJJ Prehab"], kpis=["Trap Bar Deadlift", "Back Squat"],
+        title="Lower Body: Peso Muerto & Potencia Isquios",
+        tags=["Hybrid", "Legs", "Deadlift", "BJJ Prehab"], kpis=["Trap Bar Deadlift"],
         blocks=[
             WorkoutBlock(
                 code="S", title="PRIMARY STRENGTH (% 1RM WAVE)", subtitle="77.5% - 82.5% 1RM",
@@ -291,10 +318,10 @@ OCTOBER_BJJ_PROGRAM = [
                 ]
             ),
             WorkoutBlock(
-                code="H", title="TENDON HEALTH", subtitle="Protección de rodillas y tobillos",
+                code="H", title="TENDON HEALTH & RDL", subtitle="Protección de rodillas y tobillos",
                 rest_block_desc="75 segundos de descanso",
                 exercises=[
-                    Exercise(name="Nordic Curls o RDL con mancuernas", target="3 x 8-10 reps", rest_seconds=90, rest_description="90s descanso"),
+                    Exercise(name="Dumbbell Romanian Deadlift (RDL)", target="3 x 8-10 reps", rest_seconds=90, rest_description="90s descanso"),
                     Exercise(name="Tibialis & Soleus raises", target="2 x 15 reps", rest_seconds=45, rest_description="45s descanso")
                 ]
             )
@@ -371,10 +398,10 @@ OCTOBER_BJJ_PROGRAM = [
 PROGRAMS_CATALOG = [
     Program(
         id="perform_sep",
-        title="FASE 1: Septiembre (Cimentación Híbrida)",
-        category="Hybrid",
-        tags=["4 Días Gym", "Running 10k", "Bici Z2", "Sauna"],
-        description="Fase de construcción de masa muscular, blindaje articular y base de velocidad para la 10k sin fatiga de BJJ.",
+        title="FASE 1: Septiembre (Cimentación Híbrida - 4 Días Gym)",
+        category="Hybrid (4 Días Gym)",
+        tags=["4 Días Gym", "Running 10k", "Deadlift Focus", "Sauna"],
+        description="Fase de 4 días de fuerza (Torso/Pierna), blindaje articular sin dominadas lastradas y peso muerto pesado.",
         is_active=True
     ),
     Program(
