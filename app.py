@@ -5,7 +5,7 @@ import plotly.express as px
 from src.ui.styles import apply_custom_styles
 from src.ui.components import render_top_bar, render_phase_snapshot, render_kpi_table, render_exercise_item
 from src.database.repository import init_db, log_session, get_completed_sessions_count, get_all_user_1rms, update_user_1rm
-from src.services.progression import calculate_estimated_1rm, calculate_target_weight
+from src.services.progression import calculate_estimated_1rm, calculate_target_weight, get_week_periodization_wave, calculate_running_10k_paces
 from src.seed_data import SEPTEMBER_PROGRAM, OCTOBER_BJJ_PROGRAM, PROGRAMS_CATALOG
 
 init_db()
@@ -21,15 +21,21 @@ apply_custom_styles()
 
 user_1rms = get_all_user_1rms()
 
+# Inicialización de Estados
 if "active_program_id" not in st.session_state:
     st.session_state["active_program_id"] = "perform_sep"
 if "selected_day_idx" not in st.session_state:
     st.session_state["selected_day_idx"] = 0
 if "current_view" not in st.session_state:
     st.session_state["current_view"] = "plan"
+if "current_block_week" not in st.session_state:
+    st.session_state["current_block_week"] = 1
+if "target_10k_time" not in st.session_state:
+    st.session_state["target_10k_time"] = 45.0
 
 active_program_data = SEPTEMBER_PROGRAM if st.session_state["active_program_id"] == "perform_sep" else OCTOBER_BJJ_PROGRAM
 active_program_title = "FASE 1 (Septiembre Cimentación)" if st.session_state["active_program_id"] == "perform_sep" else "FASE 2 (Octubre + BJJ)"
+current_wave = get_week_periodization_wave(st.session_state["current_block_week"])
 
 render_top_bar(program_name=f"PERFORM • {active_program_title}", streak_days=4 + get_completed_sessions_count())
 
@@ -45,18 +51,38 @@ with nav_c3:
     if st.button("📊 PROGRESO & KPIS", use_container_width=True):
         st.session_state["current_view"] = "kpis"
 with nav_c4:
-    if st.button("⚙️ MIS 1RMs", use_container_width=True):
+    if st.button("⚙️ MIS 1RMs & RITMOS", use_container_width=True):
         st.session_state["current_view"] = "settings_1rm"
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# VISTA 1: PLAN SEMANAL CON TIEMPOS DE DESCANSO VISIBLES
+# VISTA 1: PLAN SEMANAL CON PERIODIZACIÓN POR SEMANAS
 # -------------------------------------------------------------
 if st.session_state["current_view"] == "plan":
-    st.markdown(f"<div style='font-size: 0.8rem; font-weight: 700; color: #9CA3AF; text-transform: uppercase; margin-bottom: 0.4rem;'>MICROCIELO SEMANAL • {active_program_title}</div>", unsafe_allow_html=True)
-    cols_cal = st.columns(7)
+    # Selector de Semana del Bloque (1 a 4)
+    w_col1, w_col2, w_col3, w_col4 = st.columns(4)
+    with w_col1:
+        if st.button("Sem 1: Acumulación (72.5-80%)", use_container_width=True, type="primary" if st.session_state["current_block_week"]==1 else "secondary"):
+            st.session_state["current_block_week"] = 1
+            st.rerun()
+    with w_col2:
+        if st.button("Sem 2: Sobrecarga (75-82.5%)", use_container_width=True, type="primary" if st.session_state["current_block_week"]==2 else "secondary"):
+            st.session_state["current_block_week"] = 2
+            st.rerun()
+    with w_col3:
+        if st.button("Sem 3: Pico (80-87.5%)", use_container_width=True, type="primary" if st.session_state["current_block_week"]==3 else "secondary"):
+            st.session_state["current_block_week"] = 3
+            st.rerun()
+    with w_col4:
+        if st.button("Sem 4: Deload (60-65%)", use_container_width=True, type="primary" if st.session_state["current_block_week"]==4 else "secondary"):
+            st.session_state["current_block_week"] = 4
+            st.rerun()
+
+    st.markdown(f"<div style='font-size: 0.8rem; font-weight: 700; color: #10B981; margin-top: 5px; margin-bottom: 8px;'>ONDA ACTIVA: {current_wave['name']} • {current_wave['desc']}</div>", unsafe_allow_html=True)
     
+    # Selector de los 7 Días
+    cols_cal = st.columns(7)
     for idx, day in enumerate(active_program_data):
         with cols_cal[idx]:
             label = f"{day.day_name} {day.date_num}\n{day.type_badge}"
@@ -79,7 +105,7 @@ if st.session_state["current_view"] == "plan":
             f'<div class="marchon-card">'
             f'<div style="display: flex; justify-content: space-between; align-items: flex-start;">'
             f'<div>{tags_html}<h2 style="color: white; margin: 0.4rem 0; font-size: 1.5rem; font-weight: 800;">{current_day.title}</h2>{kpi_html}</div>'
-            f'<div style="text-align: right;"><span class="badge-green">{current_day.day_name} {current_day.date_num}</span></div>'
+            f'<div style="text-align: right;"><span class="badge-green">{current_day.day_name} {current_day.date_num} • {current_wave["name"].split(":")[0]}</span></div>'
             f'</div></div>',
             unsafe_allow_html=True
         )
@@ -108,7 +134,18 @@ if st.session_state["current_view"] == "plan":
                         )
 
                     for ex in block.exercises:
-                        if block.code == "S" and (ex.exercise_key or ex.intensity_pct or ex.default_weight):
+                        # Si es el bloque de Running, mostrar ritmos calculados de la San Silvestre
+                        if block.code == "R":
+                            paces = calculate_running_10k_paces(st.session_state["target_10k_time"])
+                            st.markdown(
+                                f'<div style="background: #1D222E; border-left: 3px solid #10B981; padding: 0.6rem 0.9rem; border-radius: 6px; margin-bottom: 8px;">'
+                                f'<div style="color: white; font-weight: 700;">{ex.name}</div>'
+                                f'<div style="color: #10B981; font-size: 0.82rem; font-weight: 600; margin-top: 2px;">🎯 Ritmo San Silvestre Objetivo: {paces["intervals_1000m"]} (para meta {st.session_state["target_10k_time"]} min)</div>'
+                                f'<div style="color: #9CA3AF; font-size: 0.75rem; margin-top: 2px;">{ex.notes if ex.notes else ex.target} • ⏱️ {ex.rest_description}</div>'
+                                f'</div>',
+                                unsafe_allow_html=True
+                            )
+                        elif block.code == "S" and (ex.exercise_key or ex.intensity_pct or ex.default_weight):
                             base_1rm = user_1rms.get(ex.exercise_key, 100.0) if ex.exercise_key else 100.0
                             
                             st.markdown(
@@ -122,8 +159,9 @@ if st.session_state["current_view"] == "plan":
                             if ex.notes:
                                 st.markdown(f"<div style='color: #9CA3AF; font-size: 0.78rem; margin-bottom: 10px;'>💡 {ex.notes}</div>", unsafe_allow_html=True)
                             
-                            num_sets = ex.target_sets or 4
-                            default_reps = ex.target_reps or 5
+                            num_sets = current_wave["sets"]
+                            default_reps = current_wave["reps"]
+                            pct_wave = current_wave["pct_wave"]
                             
                             cols_head = st.columns([0.8, 1.8, 2.0, 1.4, 1.4, 1.4])
                             cols_head[0].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>SET</span>", unsafe_allow_html=True)
@@ -133,37 +171,44 @@ if st.session_state["current_view"] == "plan":
                             cols_head[4].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>RPE</span>", unsafe_allow_html=True)
                             cols_head[5].markdown("<span style='color:#9CA3AF; font-size:0.75rem; font-weight:700;'>EST. 1RM</span>", unsafe_allow_html=True)
 
-                            pct_wave_defaults = [72.5, 75.0, 77.5, 80.0] if num_sets >= 4 else [75.0, 77.5, 80.0]
-
                             for s_num in range(1, num_sets + 1):
                                 sc = st.columns([0.8, 1.8, 2.0, 1.4, 1.4, 1.4])
                                 sc[0].markdown(f"<div style='color: white; font-weight: 800; margin-top: 8px;'>#{s_num}</div>", unsafe_allow_html=True)
                                 
-                                default_pct = pct_wave_defaults[s_num - 1] if s_num <= len(pct_wave_defaults) else 77.5
+                                default_pct = pct_wave[s_num - 1] if s_num <= len(pct_wave) else pct_wave[-1]
                                 pct_options = [60.0, 65.0, 70.0, 72.5, 75.0, 77.5, 80.0, 82.5, 85.0, 87.5, 90.0]
                                 idx_pct = pct_options.index(default_pct) if default_pct in pct_options else 5
                                 
-                                s_pct = sc[1].selectbox(f"Pct_{s_num}", pct_options, index=idx_pct, key=f"pct_{ex.name}_{s_num}", label_visibility="collapsed", format_func=lambda x: f"{x}%")
+                                s_pct = sc[1].selectbox(f"Pct_{s_num}", pct_options, index=idx_pct, key=f"pct_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed", format_func=lambda x: f"{x}%")
                                 calc_weight = calculate_target_weight(base_1rm, s_pct / 100.0)
                                 
-                                s_w = sc[2].number_input(f"W_{s_num}", min_value=0.0, value=calc_weight, step=2.5, key=f"w_{ex.name}_{s_num}", label_visibility="collapsed")
-                                s_r = sc[3].number_input(f"R_{s_num}", min_value=1, max_value=30, value=default_reps, step=1, key=f"r_{ex.name}_{s_num}", label_visibility="collapsed")
-                                s_rpe = sc[4].selectbox(f"RPE_{s_num}", [7.0, 7.5, 8.0, 8.5, 9.0], index=2, key=f"rpe_{ex.name}_{s_num}", label_visibility="collapsed")
+                                s_w = sc[2].number_input(f"W_{s_num}", min_value=0.0, value=calc_weight, step=2.5, key=f"w_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed")
+                                s_r = sc[3].number_input(f"R_{s_num}", min_value=1, max_value=30, value=default_reps, step=1, key=f"r_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed")
+                                s_rpe = sc[4].selectbox(f"RPE_{s_num}", [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0], index=4, key=f"rpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}", label_visibility="collapsed")
                                 
                                 est_1rm = calculate_estimated_1rm(s_w, s_r)
                                 sc[5].markdown(f"<div style='color: #10B981; font-weight: 800; margin-top: 8px;'>{est_1rm} kg</div>", unsafe_allow_html=True)
 
-                            # Temporizador dedicado para este ejercicio pesado
+                            # Temporizador con Beep acústico
                             rest_mins = (ex.rest_seconds or 120) // 60
                             rest_secs = (ex.rest_seconds or 120) % 60
-                            rest_btn_label = f"⏱️ Iniciar Descanso ({rest_mins}:{rest_secs:02d})"
-                            
-                            c_t1, c_t2 = st.columns([2.5, 4.5])
+                            c_t1, c_t2 = st.columns([2.8, 4.2])
                             with c_t1:
-                                if st.button(rest_btn_label, key=f"btn_t_{ex.name}", use_container_width=True):
+                                if st.button(f"⏱️ Iniciar Descanso ({rest_mins}:{rest_secs:02d})", key=f"btn_t_{ex.name}", use_container_width=True):
                                     with st.spinner(f"⏳ Descansando {ex.rest_description}..."):
                                         time.sleep(2)
-                                        st.toast(f"¡Tiempo cumplido ({ex.rest_description})! A por la siguiente serie 💪")
+                                        st.markdown("""
+                                        <script>
+                                        let ctx = new (window.AudioContext || window.webkitAudioContext)();
+                                        let osc = ctx.createOscillator();
+                                        osc.type = 'sine';
+                                        osc.frequency.setValueAtTime(800, ctx.currentTime);
+                                        osc.connect(ctx.destination);
+                                        osc.start();
+                                        osc.stop(ctx.currentTime + 0.3);
+                                        </script>
+                                        """, unsafe_allow_html=True)
+                                        st.toast(f"🔔 ¡Tiempo cumplido ({ex.rest_description})! A por la siguiente serie 💪")
 
                             st.markdown("<hr style='border: 0.5px solid rgba(255,255,255,0.06); margin: 15px 0;'>", unsafe_allow_html=True)
                         else:
@@ -183,7 +228,7 @@ if st.session_state["current_view"] == "plan":
             {"name": "Bench Press", "metric": "1RM Actual", "baseline": f"{user_1rms.get('bench_press', 120)*0.95:.1f} kg", "retest": f"{user_1rms.get('bench_press', 120)} kg", "delta": "+5.2%"},
             {"name": "Back Squat", "metric": "1RM Actual", "baseline": "135 kg", "retest": f"{user_1rms.get('back_squat', 140)} kg", "delta": "+3.7%"},
             {"name": "Trap Bar Deadlift", "metric": "1RM Actual", "baseline": "155 kg", "retest": f"{user_1rms.get('deadlift', 165)} kg", "delta": "+6.4%"},
-            {"name": "San Silvestre 10k", "metric": "Ritmo Umbral", "baseline": "4:45/km", "retest": "4:28/km", "delta": "+6.0%"},
+            {"name": "San Silvestre 10k", "metric": "Ritmo Umbral", "baseline": "4:45/km", "retest": f"{calculate_running_10k_paces(st.session_state['target_10k_time'])['intervals_1000m']}", "delta": "+6.0%"},
         ]
         render_kpi_table(kpis_data)
         
@@ -267,32 +312,52 @@ elif st.session_state["current_view"] == "kpis":
         st.plotly_chart(fig_pie, use_container_width=True)
 
 # -------------------------------------------------------------
-# VISTA 4: PANEL DE GESTIÓN Y ACTUALIZACIÓN DE 1RMs
+# VISTA 4: PANEL DE GESTIÓN DE 1RMs Y RITMOS SAN SILVESTRE
 # -------------------------------------------------------------
 elif st.session_state["current_view"] == "settings_1rm":
-    st.markdown("<h2 style='color: white; font-weight: 800;'>⚙️ Gestión de Marcas 1RM del Usuario</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #9CA3AF;'>Introduce tus marcas máximas reales. Todos los entrenamientos calcularán automáticamente los pesos exactos de cada serie según el % programado.</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: white; font-weight: 800;'>⚙️ Gestión de Marcas 1RM & Ritmos San Silvestre</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #9CA3AF;'>Personaliza tu perfil de atleta. Las cargas del gimnasio y los ritmos de carrera se sincronizan en tiempo real.</p>", unsafe_allow_html=True)
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown('<div class="marchon-card"><h4 style="color: white;">Tren Superior</h4>', unsafe_allow_html=True)
+        st.markdown('<div class="marchon-card"><h4 style="color: white;">🏋️‍♂️ 1RMs de Fuerza (kg)</h4>', unsafe_allow_html=True)
         new_bench = st.number_input("Barbell Bench Press (1RM en kg)", min_value=20.0, max_value=300.0, value=float(user_1rms.get("bench_press", 120.0)), step=2.5)
         new_ohp = st.number_input("Standing Overhead Press (1RM en kg)", min_value=15.0, max_value=200.0, value=float(user_1rms.get("ohp", 70.0)), step=2.5)
         new_pull = st.number_input("Weighted Pull-up (Peso corporal + Lastre en kg)", min_value=40.0, max_value=250.0, value=float(user_1rms.get("pull_up", 100.0)), step=2.5)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with c2:
-        st.markdown('<div class="marchon-card"><h4 style="color: white;">Tren Inferior</h4>', unsafe_allow_html=True)
         new_squat = st.number_input("Barbell Back Squat (1RM en kg)", min_value=20.0, max_value=400.0, value=float(user_1rms.get("back_squat", 140.0)), step=2.5)
         new_deadlift = st.number_input("Trap Bar Deadlift (1RM en kg)", min_value=30.0, max_value=450.0, value=float(user_1rms.get("deadlift", 165.0)), step=2.5)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.button("💾 GUARDAR NUEVOS 1RMs Y RECALCULAR PLAN", use_container_width=True):
+    with c2:
+        st.markdown('<div class="marchon-card"><h4 style="color: white;">🏃‍♂️ San Silvestre Vallecana 10k</h4>', unsafe_allow_html=True)
+        target_10k = st.number_input("Objetivo 10k (Tiempo en minutos)", min_value=30.0, max_value=75.0, value=float(st.session_state["target_10k_time"]), step=0.5)
+        st.session_state["target_10k_time"] = target_10k
+        
+        paces = calculate_running_10k_paces(target_10k)
+        st.markdown(f"""
+        <div style="background: #1D222E; padding: 0.75rem; border-radius: 8px; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <span style="color: #9CA3AF; font-size: 0.85rem;">Ritmo Carrera 10k:</span>
+                <span style="color: white; font-weight: 800;">{paces['race_pace']}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <span style="color: #9CA3AF; font-size: 0.85rem;">Series 1000m (Martes):</span>
+                <span style="color: #10B981; font-weight: 800;">{paces['intervals_1000m']}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <span style="color: #9CA3AF; font-size: 0.85rem;">Tirada Z2 (Sábado/Bici):</span>
+                <span style="color: #3B82F6; font-weight: 800;">{paces['z2_easy']}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    if st.button("💾 GUARDAR TODOS LOS PARÁMETROS", use_container_width=True):
         update_user_1rm("bench_press", new_bench)
         update_user_1rm("ohp", new_ohp)
         update_user_1rm("pull_up", new_pull)
         update_user_1rm("back_squat", new_squat)
         update_user_1rm("deadlift", new_deadlift)
-        st.success("¡1RMs actualizados en la base de datos con éxito! Todos los pesos del plan han sido recalculados.")
+        st.success("¡Perfil y marcas actualizadas! Plan totalmente sincronizado.")
         time.sleep(1)
         st.rerun()
