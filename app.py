@@ -52,7 +52,7 @@ active_program_data = SEPTEMBER_PROGRAM if st.session_state["active_program_id"]
 current_wave = get_week_periodization_wave(st.session_state["current_block_week"])
 
 # -------------------------------------------------------------
-# 1. TIRA HORIZONTAL DE CALENDARIO
+# 1. TIRA HORIZONTAL DE CALENDARIO (SCROLL FORZADO EN MÓVIL)
 # -------------------------------------------------------------
 cal_cols = st.columns(7)
 for idx, day in enumerate(active_program_data):
@@ -78,25 +78,25 @@ current_day = active_program_data[st.session_state["selected_day_idx"]]
 # 2. CABECERA MARCHON (TODAY + PROGRAMAS + SUBTABS)
 # -------------------------------------------------------------
 st.markdown(f"""
-<div style="margin-top: 0.3rem; margin-bottom: 0.6rem;">
-    <div style="font-size: 0.85rem; color: #9CA3AF; font-weight: 600;">Today {current_day.date_num} Sep 2026</div>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.1rem; margin-bottom: 0.8rem;">
-        <div style="display: flex; gap: 1rem; align-items: baseline;">
-            <span style="color: #FFFFFF; font-size: 1.5rem; font-weight: 900; letter-spacing: -0.5px;">PERFORM</span>
-            <span style="color: #4B5563; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.5px;">HYROX</span>
+<div style="margin-top: 0.2rem; margin-bottom: 0.5rem;">
+    <div style="font-size: 0.8rem; color: #9CA3AF; font-weight: 700; text-transform: uppercase;">Today {current_day.date_num} Sep 2026</div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.1rem; margin-bottom: 0.6rem;">
+        <div style="display: flex; gap: 0.8rem; align-items: baseline;">
+            <span style="color: #FFFFFF; font-size: 1.4rem; font-weight: 900; letter-spacing: -0.5px;">PERFORM</span>
+            <span style="color: #4B5563; font-size: 1.2rem; font-weight: 800; letter-spacing: -0.5px;">HYROX</span>
         </div>
-        <div style="color: #6B7280; font-size: 1.5rem; font-weight: 300;">+</div>
+        <div style="color: #6B7280; font-size: 1.3rem; font-weight: 300;">+</div>
     </div>
-    <div class="marchon-subtabs">
-        <span class="subtab-active">Workout</span>
-        <span class="subtab-inactive">Coach Video</span>
-        <span class="subtab-inactive">Daily Mobility</span>
+    <div style="display: flex; gap: 1.2rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 0.4rem; margin-bottom: 0.8rem;">
+        <span style="color: #FFFFFF; font-weight: 800; font-size: 0.9rem; border-bottom: 2px solid white; padding-bottom: 4px;">Workout</span>
+        <span style="color: #6B7280; font-weight: 600; font-size: 0.9rem;">Coach Notes</span>
+        <span style="color: #6B7280; font-weight: 600; font-size: 0.9rem;">Readiness</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# VISTA: WORKOUT CON EJERCICIOS INDIVIDUALMENTE COLAPSABLES
+# VISTA: WORKOUT CON 3 NIVELES COLAPSABLES (BLOQUE -> EJERCICIO -> SERIES)
 # -------------------------------------------------------------
 if st.session_state["current_view"] == "workout":
     sets_to_save = []
@@ -110,96 +110,78 @@ if st.session_state["current_view"] == "workout":
             unsafe_allow_html=True
         )
     else:
-        # Recorrer cada bloque de la sesión
+        # NIVEL 1: BLOQUES COLAPSABLES CON CÓDIGO DE COLOR
         for b_idx, block in enumerate(current_day.blocks):
-            badge_class = "block-badge-accent" if block.code == "W" else "block-badge-circle"
+            block_code_lower = block.code.lower()
+            block_label = f"[{block.code}]  {block.title.upper()} ({block.subtitle})"
             
-            # Cabecera del Bloque
-            st.markdown(f"""
-            <div style="display: flex; align-items: center; margin-top: 18px; margin-bottom: 8px;">
-                <span class="{badge_class}">{block.code}</span>
-                <span style="color: white; font-weight: 900; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.3px;">{block.title}</span>
-            </div>
-            """, unsafe_allow_html=True)
+            with st.expander(block_label, expanded=(b_idx == 0 or b_idx == 1)):
+                if block.rest_block_desc:
+                    st.markdown(f"<div style='color: #9CA3AF; font-size: 0.72rem; margin-bottom: 8px; text-transform: uppercase;'>PAUTA DE DESCANSO: {block.rest_block_desc}</div>", unsafe_allow_html=True)
 
-            if block.rest_block_desc:
-                st.markdown(f"<div style='color: #9CA3AF; font-size: 0.72rem; margin-bottom: 8px; text-transform: uppercase;'>PAUTA DE DESCANSO: {block.rest_block_desc}</div>", unsafe_allow_html=True)
+                # NIVEL 2: EJERCICIOS INDIVIDUALES COLAPSABLES
+                for e_idx, ex in enumerate(block.exercises):
+                    if block.code == "R":
+                        paces = calculate_running_10k_paces(st.session_state["target_10k_time"])
+                        with st.expander(f"{ex.name}  •  {ex.target}", expanded=True):
+                            st.markdown(
+                                f'<div style="color: #10B981; font-weight: 800; font-size: 0.88rem; margin-bottom: 4px;">RITMO SAN SILVESTRE: {paces["intervals_1000m"]}</div>'
+                                f'<div style="color: #9CA3AF; font-size: 0.78rem;">{ex.notes if ex.notes else ex.target} • {ex.rest_description}</div>',
+                                unsafe_allow_html=True
+                            )
+                    elif block.code in ["S", "H"] and (ex.exercise_key or ex.intensity_pct or ex.default_weight):
+                        base_1rm = user_1rms.get(ex.exercise_key, 100.0) if ex.exercise_key else 100.0
+                        num_sets = current_wave["sets"] if block.code == "S" else (ex.target_sets or 3)
+                        default_reps = current_wave["reps"] if block.code == "S" else (ex.target_reps or 10)
+                        pct_wave = current_wave["pct_wave"]
 
-            # Recorrer cada ejercicio individual como tarjeta colapsable
-            for e_idx, ex in enumerate(block.exercises):
-                if block.code == "R":
-                    paces = calculate_running_10k_paces(st.session_state["target_10k_time"])
-                    with st.expander(f"{ex.name}  •  {ex.target}", expanded=True):
-                        st.markdown(
-                            f'<div style="color: #10B981; font-weight: 800; font-size: 0.88rem; margin-bottom: 4px;">RITMO SAN SILVESTRE: {paces["intervals_1000m"]}</div>'
-                            f'<div style="color: #9CA3AF; font-size: 0.78rem;">{ex.notes if ex.notes else ex.target} • {ex.rest_description}</div>',
-                            unsafe_allow_html=True
-                        )
-                elif block.code in ["S", "H"] and (ex.exercise_key or ex.intensity_pct or ex.default_weight):
-                    base_1rm = user_1rms.get(ex.exercise_key, 100.0) if ex.exercise_key else 100.0
-                    num_sets = current_wave["sets"] if block.code == "S" else (ex.target_sets or 3)
-                    default_reps = current_wave["reps"] if block.code == "S" else (ex.target_reps or 10)
-                    pct_wave = current_wave["pct_wave"]
+                        ex_label = f"{ex.name}  •  {ex.target}"
+                        
+                        with st.expander(ex_label, expanded=(e_idx == 0)):
+                            st.markdown(
+                                f'<div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">'
+                                f'<span style="color: #9CA3AF; font-size: 0.78rem;">1RM Base: <b style="color: #FF5722;">{base_1rm} kg</b> | {ex.rest_description}</span>'
+                                f'</div>',
+                                unsafe_allow_html=True
+                            )
+                            if ex.notes:
+                                st.markdown(f"<div style='color: #9CA3AF; font-size: 0.75rem; margin-bottom: 10px;'>• {ex.notes}</div>", unsafe_allow_html=True)
 
-                    # TÍTULO DEL EXPANDER DEL EJERCICIO (Expandido por defecto solo el primero de cada bloque)
-                    expander_title = f"{ex.name}  •  {ex.target}"
-                    
-                    with st.expander(expander_title, expanded=(b_idx == 0 and e_idx == 0)):
-                        st.markdown(
-                            f'<div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">'
-                            f'<span style="color: #9CA3AF; font-size: 0.78rem;">1RM Base: <b style="color: #FF5722;">{base_1rm} kg</b> | {ex.rest_description}</span>'
-                            f'</div>',
-                            unsafe_allow_html=True
-                        )
-                        if ex.notes:
-                            st.markdown(f"<div style='color: #9CA3AF; font-size: 0.75rem; margin-bottom: 10px;'>• {ex.notes}</div>", unsafe_allow_html=True)
+                            # NIVEL 3: CADA SERIE INDIVIDUALMENTE COLAPSABLE
+                            for s_num in range(1, num_sets + 1):
+                                default_pct = pct_wave[s_num - 1] if (block.code=="S" and s_num <= len(pct_wave)) else (ex.intensity_pct*100 if ex.intensity_pct else 75.0)
+                                calc_weight = calculate_target_weight(base_1rm, default_pct / 100.0) if ex.exercise_key else (ex.default_weight or 20.0)
 
-                        # Formulario de Series dentro del Ejercicio
-                        for s_num in range(1, num_sets + 1):
-                            default_pct = pct_wave[s_num - 1] if (block.code=="S" and s_num <= len(pct_wave)) else (ex.intensity_pct*100 if ex.intensity_pct else 75.0)
-                            calc_weight = calculate_target_weight(base_1rm, default_pct / 100.0) if ex.exercise_key else (ex.default_weight or 20.0)
+                                set_label = f"SERIE #{s_num}  •  {default_pct}% 1RM  •  {calc_weight} KG"
+                                
+                                with st.expander(set_label, expanded=(s_num == 1)):
+                                    c_w, c_r, c_rpe = st.columns([1.4, 1.2, 1.4])
+                                    with c_w:
+                                        s_w = st.number_input("Peso (kg)", min_value=0.0, value=calc_weight, step=2.5, key=f"mw_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
+                                    with c_r:
+                                        s_r = st.number_input("Reps", min_value=1, max_value=30, value=default_reps, step=1, key=f"mr_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
+                                    with c_rpe:
+                                        s_rpe = st.selectbox("RPE", [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0], index=4, key=f"mrpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
+                                    
+                                    est_1rm = calculate_estimated_1rm(s_w, s_r)
+                                    st.markdown(f"<div style='text-align: right; color: #9CA3AF; font-size: 0.72rem; margin-top: 4px;'>1RM ESTIMADO: <b style='color: #10B981;'>{est_1rm} KG</b></div>", unsafe_allow_html=True)
 
-                            st.markdown(f"""
-                            <div class="mobile-set-box">
-                                <div class="mobile-set-header">
-                                    <div>
-                                        <b style="color: white; font-size: 0.82rem;">SERIE #{s_num}</b>
-                                        <span class="badge-tag" style="margin-left: 0.3rem;">{default_pct}% 1RM</span>
-                                    </div>
-                                    <div>
-                                        <span style="color: #10B981; font-weight: 800; font-size: 0.8rem;">SUGERIDO: {calc_weight} KG</span>
-                                    </div>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                                    sets_to_save.append({
+                                        "exercise_name": ex.name, "set_num": s_num, "pct_1rm": default_pct,
+                                        "weight": s_w, "reps": s_r, "rpe": s_rpe, "est_1rm": est_1rm
+                                    })
 
-                            c_w, c_r, c_rpe = st.columns([1.4, 1.2, 1.4])
-                            with c_w:
-                                s_w = st.number_input("Peso (kg)", min_value=0.0, value=calc_weight, step=2.5, key=f"mw_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
-                            with c_r:
-                                s_r = st.number_input("Reps", min_value=1, max_value=30, value=default_reps, step=1, key=f"mr_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
-                            with c_rpe:
-                                s_rpe = st.selectbox("RPE", [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0], index=4, key=f"mrpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
-                            
-                            est_1rm = calculate_estimated_1rm(s_w, s_r)
-                            st.markdown(f"<div style='text-align: right; color: #9CA3AF; font-size: 0.7rem; margin-top: -8px; margin-bottom: 6px;'>1RM ESTIMADO: <b style='color: #10B981;'>{est_1rm} KG</b></div>", unsafe_allow_html=True)
-
-                            sets_to_save.append({
-                                "exercise_name": ex.name, "set_num": s_num, "pct_1rm": default_pct,
-                                "weight": s_w, "reps": s_r, "rpe": s_rpe, "est_1rm": est_1rm
-                            })
-
-                        rest_mins = (ex.rest_seconds or 120) // 60
-                        rest_secs = (ex.rest_seconds or 120) % 60
-                        if st.button(f"INICIAR DESCANSO ({rest_mins}:{rest_secs:02d})", key=f"btn_t_{ex.name}", use_container_width=True):
-                            with st.spinner(f"Descansando {ex.rest_description}..."):
-                                time.sleep(2)
-                                st.toast(f"Tiempo cumplido: {ex.rest_description}")
-                else:
-                    # Ejercicios de Warm Up o accesorios simples
-                    with st.expander(f"{ex.name}  •  {ex.target}", expanded=False):
-                        notes_with_rest = f"{ex.notes} • {ex.rest_description}" if ex.notes else ex.rest_description
-                        st.markdown(f"<div style='color: #9CA3AF; font-size: 0.8rem;'>{notes_with_rest}</div>", unsafe_allow_html=True)
+                            rest_mins = (ex.rest_seconds or 120) // 60
+                            rest_secs = (ex.rest_seconds or 120) % 60
+                            st.markdown("<div style='height: 4px;'></div>", unsafe_allow_html=True)
+                            if st.button(f"INICIAR DESCANSO ({rest_mins}:{rest_secs:02d})", key=f"btn_t_{ex.name}", use_container_width=True):
+                                with st.spinner(f"Descansando {ex.rest_description}..."):
+                                    time.sleep(2)
+                                    st.toast(f"Tiempo cumplido: {ex.rest_description}")
+                    else:
+                        with st.expander(f"{ex.name}  •  {ex.target}", expanded=False):
+                            notes_with_rest = f"{ex.notes} • {ex.rest_description}" if ex.notes else ex.rest_description
+                            st.markdown(f"<div style='color: #9CA3AF; font-size: 0.8rem;'>{notes_with_rest}</div>", unsafe_allow_html=True)
 
         st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
         sauna_done = st.checkbox("Sauna seca realizada hoy (20-30 min)", key="sauna_check")
@@ -245,7 +227,7 @@ elif st.session_state["current_view"] == "programs":
         tags_str = "".join([f'<span class="badge-tag">{t}</span>' for t in prog.tags])
         st.markdown(f"""
         <div style="background: #161922; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1rem; margin-bottom: 0.8rem;">
-            <span class="badge-kpi">{prog.category}</span>
+            <span class="badge-tag">{prog.category}</span>
             <h4 style="color: white; margin: 0.3rem 0; font-weight: 800;">{prog.title}</h4>
             <p style="color: #9CA3AF; font-size: 0.82rem; margin-bottom: 0.5rem;">{prog.description}</p>
             {tags_str}
