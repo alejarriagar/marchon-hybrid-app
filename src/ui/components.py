@@ -18,10 +18,10 @@ def check_pin_auth(default_pin="6367") -> bool:
             pin_input = st.text_input("PIN", type="password", placeholder="PIN", label_visibility="collapsed")
             submit = st.form_submit_button("DESBLOQUEAR", use_container_width=True)
             if submit:
+                # Lectura blindada: si no hay secrets.toml, usa 'default_pin' directamente
                 valid_pin = default_pin
                 try:
-                    if hasattr(st, "secrets") and "APP_PIN" in st.secrets:
-                        valid_pin = str(st.secrets["APP_PIN"])
+                    valid_pin = str(st.secrets["APP_PIN"])
                 except Exception:
                     valid_pin = default_pin
 
