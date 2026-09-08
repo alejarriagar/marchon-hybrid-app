@@ -8,6 +8,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
+    # 1. Tabla de 1RMs
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS user_1rms (
         exercise_key TEXT PRIMARY KEY,
@@ -28,6 +29,7 @@ def init_db():
     VALUES (?, ?, ?)
     """, default_1rms)
     
+    # 2. Tabla de Series
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS exercise_set_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,16 +37,31 @@ def init_db():
         day_id TEXT,
         exercise_name TEXT,
         set_number INTEGER,
-        pct_1rm REAL,
-        weight REAL,
-        reps INTEGER,
-        rpe REAL,
-        est_1rm REAL,
+        pct_1rm REAL DEFAULT 75.0,
+        weight REAL DEFAULT 0.0,
+        reps INTEGER DEFAULT 5,
+        rpe REAL DEFAULT 8.0,
+        est_1rm REAL DEFAULT 0.0,
         logged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(date, day_id, exercise_name, set_number)
     )
     """)
     
+    # MIGRACIÓN AUTOMÁTICA: Si la tabla ya existía sin pct_1rm o est_1rm, las añade sin romper nada
+    cursor.execute("PRAGMA table_info(exercise_set_logs)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "pct_1rm" not in columns:
+        try:
+            cursor.execute("ALTER TABLE exercise_set_logs ADD COLUMN pct_1rm REAL DEFAULT 75.0")
+        except Exception:
+            pass
+    if "est_1rm" not in columns:
+        try:
+            cursor.execute("ALTER TABLE exercise_set_logs ADD COLUMN est_1rm REAL DEFAULT 0.0")
+        except Exception:
+            pass
+
+    # 3. Tabla de Sesiones Completadas
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS completed_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,6 +75,7 @@ def init_db():
     )
     """)
 
+    # 4. Tabla de Readiness Diario
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS daily_readiness (
         date TEXT PRIMARY KEY,
@@ -85,19 +103,26 @@ def save_single_set(date: str, day_id: str, exercise_name: str, set_num: int, pc
 def get_day_logged_sets(date: str, day_id: str) -> Dict[Tuple[str, int], Dict[str, Any]]:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("""
-    SELECT exercise_name, set_number, pct_1rm, weight, reps, rpe, est_1rm
-    FROM exercise_set_logs
-    WHERE date = ? AND day_id = ?
-    """, (date, day_id))
-    rows = cursor.fetchall()
-    conn.close()
     
-    logged_map = {}
-    for r in rows:
-        logged_map[(r[0], r[1])] = {
-            "pct_1rm": r[2], "weight": r[3], "reps": r[4], "rpe": r[5], "est_1rm": r[6]
+    # Consulta segura adaptada a las columnas existentes
+    cursor.execute("PRAGMA table_info(exercise_set_logs)")
+    cols = [c[1] for c in cursor.fetchall()]
+    
+    if "pct_1rm" in cols and "est_1rm" in cols:
+        cursor.execute("""
+        SELECT exercise_name, set_number, pct_1rm, weight, reps, rpe, est_1rm
+        FROM exercise_set_logs
+        WHERE date = ? AND day_id = ?
+        """, (date, day_id))
+        rows = cursor.fetchall()
+        logged_map = {
+            (r[0], r[1]): {"pct_1rm": r[2], "weight": r[3], "reps": r[4], "rpe": r[5], "est_1rm": r[6]}
+            for r in rows
         }
+    else:
+        logged_map = {}
+        
+    conn.close()
     return logged_map
 
 def get_all_user_1rms() -> Dict[str, float]:
