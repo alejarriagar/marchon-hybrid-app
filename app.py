@@ -37,16 +37,21 @@ if not check_pin_auth(default_pin="6367"):
 user_1rms = get_all_user_1rms()
 
 # -------------------------------------------------------------
-# AUTO-DETECCIÓN DE FECHA Y DÍA ACTUAL
+# DETECCIÓN DE FECHA REAL Y LUNES DE ESTA SEMANA
 # -------------------------------------------------------------
 today_real = datetime.date.today()
-today_weekday_idx = today_real.weekday()  # 0 = Lunes, ..., 6 = Domingo
+today_weekday_idx = today_real.weekday()  # Lunes = 0, ..., Domingo = 6
 monday_current_week = today_real - datetime.timedelta(days=today_weekday_idx)
+
+# Forzar inicialización limpia en el día actual si es la primera carga
+if "initialized_today" not in st.session_state:
+    st.session_state["selected_day_idx"] = today_weekday_idx
+    st.session_state["initialized_today"] = True
 
 if "active_program_id" not in st.session_state:
     st.session_state["active_program_id"] = "perform_sep"
 if "selected_day_idx" not in st.session_state:
-    st.session_state["selected_day_idx"] = today_weekday_idx  # Cargar día de hoy por defecto
+    st.session_state["selected_day_idx"] = today_weekday_idx
 if "current_view" not in st.session_state:
     st.session_state["current_view"] = "workout"
 if "current_block_week" not in st.session_state:
@@ -65,7 +70,7 @@ for i, d in enumerate(active_program_data):
     d.date_num = str(d_date.day)
 
 # -------------------------------------------------------------
-# NAVEGADOR DE SEMANAS (< SEMANA 1 DE 4 >)
+# NAVEGADOR DE SEMANAS (< SEMANA X DE 4 >)
 # -------------------------------------------------------------
 col_w_prev, col_w_title, col_w_next = st.columns([1, 4, 1])
 with col_w_prev:
@@ -75,9 +80,9 @@ with col_w_prev:
             st.rerun()
 with col_w_title:
     st.markdown(
-        f'<div style="text-align: center; background: #161922; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.5rem 0.8rem;">'
-        f'<span style="color: white; font-weight: 900; font-size: 0.9rem; text-transform: uppercase;">SEMANA {st.session_state["current_block_week"]} DE 4 • {current_wave["name"].split(":")[1].upper()}</span>'
-        f'<div style="color: #10B981; font-size: 0.72rem; font-weight: 700; margin-top: 2px;">ONDA: {current_wave["pct_wave"][0]}% - {current_wave["pct_wave"][-1]}% 1RM</div>'
+        f'<div style="text-align: center; background: #161922; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.4rem 0.8rem;">'
+        f'<span style="color: white; font-weight: 900; font-size: 0.88rem; text-transform: uppercase;">SEMANA {st.session_state["current_block_week"]} DE 4 • {current_wave["name"].split(":")[1].upper()}</span>'
+        f'<div style="color: #10B981; font-size: 0.72rem; font-weight: 700; margin-top: 1px;">ONDA: {current_wave["pct_wave"][0]}% - {current_wave["pct_wave"][-1]}% 1RM</div>'
         f'</div>',
         unsafe_allow_html=True
     )
@@ -90,7 +95,7 @@ with col_w_next:
 st.markdown("<div style='height: 4px;'></div>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# 1. TIRA HORIZONTAL DE CALENDARIO (CON HOY POR DEFECTO)
+# 1. TIRA HORIZONTAL DE CALENDARIO
 # -------------------------------------------------------------
 cal_cols = st.columns(7)
 for idx, day in enumerate(active_program_data):
@@ -105,7 +110,6 @@ for idx, day in enumerate(active_program_data):
         else:
             icon_str = "•"
             
-        today_tag = " [HOY]" if is_today else ""
         btn_label = f"{icon_str}\n{day.day_name}\n{day.date_num}"
         btn_type = "primary" if is_selected else "secondary"
         
@@ -114,20 +118,24 @@ for idx, day in enumerate(active_program_data):
             st.rerun()
 
 current_day = active_program_data[st.session_state["selected_day_idx"]]
-today_date_str = f"{today_real.year}-{today_real.month:02d}-{int(current_day.date_num):02d}"
+selected_day_date_obj = monday_current_week + datetime.timedelta(days=st.session_state["selected_day_idx"])
+today_date_str = f"{selected_day_date_obj.year}-{selected_day_date_obj.month:02d}-{selected_day_date_obj.day:02d}"
 
 # Cargar series ya guardadas de este día
 saved_sets_map = get_day_logged_sets(today_date_str, current_day.day_id)
 
 # -------------------------------------------------------------
-# 2. CABECERA MARCHON
+# 2. CABECERA MARCHON CON IDENTIFICADOR DE HOY
 # -------------------------------------------------------------
-active_day_date_obj = monday_current_week + datetime.timedelta(days=st.session_state["selected_day_idx"])
-formatted_date_header = active_day_date_obj.strftime("%d %b %Y")
+is_viewing_today = (st.session_state["selected_day_idx"] == today_weekday_idx)
+date_header_text = f"HOY {selected_day_date_obj.strftime('%d %b %Y').upper()}" if is_viewing_today else f"{current_day.day_name.upper()} {selected_day_date_obj.strftime('%d %b %Y').upper()}"
 
 st.markdown(f"""
-<div style="margin-top: 0.2rem; margin-bottom: 0.5rem;">
-    <div style="font-size: 0.8rem; color: #9CA3AF; font-weight: 700; text-transform: uppercase;">TODAY {formatted_date_header.upper()}</div>
+<div style="margin-top: 0.2rem; margin-bottom: 0.4rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 0.8rem; color: #9CA3AF; font-weight: 800; text-transform: uppercase;">{date_header_text}</span>
+        {'<span class="badge-green" style="font-size: 0.68rem;">SESIÓN DE HOY</span>' if is_viewing_today else ''}
+    </div>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.1rem; margin-bottom: 0.6rem;">
         <div style="display: flex; gap: 0.8rem; align-items: baseline;">
             <span style="color: #FFFFFF; font-size: 1.4rem; font-weight: 900; letter-spacing: -0.5px;">PERFORM</span>
@@ -142,6 +150,12 @@ st.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+# Botón para volver al día de hoy si estás viendo otro día
+if not is_viewing_today:
+    if st.button("← VOLVER A LA SESIÓN DE HOY", key="btn_back_to_today", use_container_width=True):
+        st.session_state["selected_day_idx"] = today_weekday_idx
+        st.rerun()
 
 # -------------------------------------------------------------
 # VISTA: WORKOUT CON 3 NIVELES COLAPSABLES
@@ -190,7 +204,6 @@ if st.session_state["current_view"] == "workout":
                             if ex.notes:
                                 st.markdown(f"<div style='color: #9CA3AF; font-size: 0.75rem; margin-bottom: 10px;'>• {ex.notes}</div>", unsafe_allow_html=True)
 
-                            # Series con Guardado Inmediato y Auto-apertura
                             for s_num in range(1, num_sets + 1):
                                 is_saved = (ex.name, s_num) in saved_sets_map
                                 saved_data = saved_sets_map.get((ex.name, s_num), {})
