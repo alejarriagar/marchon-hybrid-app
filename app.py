@@ -1,5 +1,6 @@
 ﻿import sys
 import os
+import datetime
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
@@ -35,10 +36,17 @@ if not check_pin_auth(default_pin="6367"):
 
 user_1rms = get_all_user_1rms()
 
+# -------------------------------------------------------------
+# AUTO-DETECCIÓN DE FECHA Y DÍA ACTUAL
+# -------------------------------------------------------------
+today_real = datetime.date.today()
+today_weekday_idx = today_real.weekday()  # 0 = Lunes, ..., 6 = Domingo
+monday_current_week = today_real - datetime.timedelta(days=today_weekday_idx)
+
 if "active_program_id" not in st.session_state:
     st.session_state["active_program_id"] = "perform_sep"
 if "selected_day_idx" not in st.session_state:
-    st.session_state["selected_day_idx"] = 0
+    st.session_state["selected_day_idx"] = today_weekday_idx  # Cargar día de hoy por defecto
 if "current_view" not in st.session_state:
     st.session_state["current_view"] = "workout"
 if "current_block_week" not in st.session_state:
@@ -51,13 +59,45 @@ if "readiness_score" not in st.session_state:
 active_program_data = SEPTEMBER_PROGRAM if st.session_state["active_program_id"] == "perform_sep" else OCTOBER_BJJ_PROGRAM
 current_wave = get_week_periodization_wave(st.session_state["current_block_week"])
 
+# Sincronizar fechas reales del calendario de esta semana
+for i, d in enumerate(active_program_data):
+    d_date = monday_current_week + datetime.timedelta(days=i)
+    d.date_num = str(d_date.day)
+
 # -------------------------------------------------------------
-# 1. TIRA HORIZONTAL DE CALENDARIO
+# NAVEGADOR DE SEMANAS (< SEMANA 1 DE 4 >)
+# -------------------------------------------------------------
+col_w_prev, col_w_title, col_w_next = st.columns([1, 4, 1])
+with col_w_prev:
+    if st.button("<", key="btn_prev_week", use_container_width=True):
+        if st.session_state["current_block_week"] > 1:
+            st.session_state["current_block_week"] -= 1
+            st.rerun()
+with col_w_title:
+    st.markdown(
+        f'<div style="text-align: center; background: #161922; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.5rem 0.8rem;">'
+        f'<span style="color: white; font-weight: 900; font-size: 0.9rem; text-transform: uppercase;">SEMANA {st.session_state["current_block_week"]} DE 4 • {current_wave["name"].split(":")[1].upper()}</span>'
+        f'<div style="color: #10B981; font-size: 0.72rem; font-weight: 700; margin-top: 2px;">ONDA: {current_wave["pct_wave"][0]}% - {current_wave["pct_wave"][-1]}% 1RM</div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+with col_w_next:
+    if st.button(">", key="btn_next_week", use_container_width=True):
+        if st.session_state["current_block_week"] < 4:
+            st.session_state["current_block_week"] += 1
+            st.rerun()
+
+st.markdown("<div style='height: 4px;'></div>", unsafe_allow_html=True)
+
+# -------------------------------------------------------------
+# 1. TIRA HORIZONTAL DE CALENDARIO (CON HOY POR DEFECTO)
 # -------------------------------------------------------------
 cal_cols = st.columns(7)
 for idx, day in enumerate(active_program_data):
     with cal_cols[idx]:
         is_selected = (idx == st.session_state["selected_day_idx"])
+        is_today = (idx == today_weekday_idx)
+        
         if idx < get_completed_sessions_count():
             icon_str = "✓"
         elif day.is_rest_day:
@@ -65,6 +105,7 @@ for idx, day in enumerate(active_program_data):
         else:
             icon_str = "•"
             
+        today_tag = " [HOY]" if is_today else ""
         btn_label = f"{icon_str}\n{day.day_name}\n{day.date_num}"
         btn_type = "primary" if is_selected else "secondary"
         
@@ -73,17 +114,20 @@ for idx, day in enumerate(active_program_data):
             st.rerun()
 
 current_day = active_program_data[st.session_state["selected_day_idx"]]
-today_date_str = f"2026-09-{current_day.date_num.zfill(2)}"
+today_date_str = f"{today_real.year}-{today_real.month:02d}-{int(current_day.date_num):02d}"
 
-# Obtener series ya guardadas en la base de datos para hoy
+# Cargar series ya guardadas de este día
 saved_sets_map = get_day_logged_sets(today_date_str, current_day.day_id)
 
 # -------------------------------------------------------------
 # 2. CABECERA MARCHON
 # -------------------------------------------------------------
+active_day_date_obj = monday_current_week + datetime.timedelta(days=st.session_state["selected_day_idx"])
+formatted_date_header = active_day_date_obj.strftime("%d %b %Y")
+
 st.markdown(f"""
 <div style="margin-top: 0.2rem; margin-bottom: 0.5rem;">
-    <div style="font-size: 0.8rem; color: #9CA3AF; font-weight: 700; text-transform: uppercase;">Today {current_day.date_num} Sep 2026</div>
+    <div style="font-size: 0.8rem; color: #9CA3AF; font-weight: 700; text-transform: uppercase;">TODAY {formatted_date_header.upper()}</div>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.1rem; margin-bottom: 0.6rem;">
         <div style="display: flex; gap: 0.8rem; align-items: baseline;">
             <span style="color: #FFFFFF; font-size: 1.4rem; font-weight: 900; letter-spacing: -0.5px;">PERFORM</span>
@@ -100,7 +144,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# VISTA: WORKOUT CON GUARDADO INMEDIATO POR SERIE
+# VISTA: WORKOUT CON 3 NIVELES COLAPSABLES
 # -------------------------------------------------------------
 if st.session_state["current_view"] == "workout":
     if current_day.is_rest_day:
@@ -146,7 +190,7 @@ if st.session_state["current_view"] == "workout":
                             if ex.notes:
                                 st.markdown(f"<div style='color: #9CA3AF; font-size: 0.75rem; margin-bottom: 10px;'>• {ex.notes}</div>", unsafe_allow_html=True)
 
-                            # RECORRIDO DE SERIES CON GUARDADO ATÓMICO
+                            # Series con Guardado Inmediato y Auto-apertura
                             for s_num in range(1, num_sets + 1):
                                 is_saved = (ex.name, s_num) in saved_sets_map
                                 saved_data = saved_sets_map.get((ex.name, s_num), {})
@@ -154,16 +198,13 @@ if st.session_state["current_view"] == "workout":
                                 default_pct = pct_wave[s_num - 1] if (block.code=="S" and s_num <= len(pct_wave)) else (ex.intensity_pct*100 if ex.intensity_pct else 75.0)
                                 calc_weight = calculate_target_weight(base_1rm, default_pct / 100.0) if ex.exercise_key else (ex.default_weight or 20.0)
 
-                                # Si ya estaba guardada en BD, usamos sus datos reales
                                 current_w = saved_data.get("weight", calc_weight)
                                 current_r = saved_data.get("reps", default_reps)
                                 current_rpe = saved_data.get("rpe", 8.0)
 
-                                # Cabecera de la serie: muestra [✓ GUARDADA] si ya está en SQLite
                                 status_tag = f"✓ GUARDADA: {current_w} KG x {current_r}" if is_saved else f"{default_pct}% 1RM • {calc_weight} KG"
                                 set_label = f"SERIE #{s_num}  •  {status_tag}"
                                 
-                                # Si no está guardada y es la primera pendiente, la abrimos por defecto
                                 with st.expander(set_label, expanded=(not is_saved and s_num == 1) or is_saved):
                                     c_w, c_r, c_rpe = st.columns([1.4, 1.2, 1.4])
                                     with c_w:
@@ -176,9 +217,8 @@ if st.session_state["current_view"] == "workout":
                                         s_rpe = st.selectbox("RPE", rpe_opts, index=idx_rpe, key=f"mrpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
                                     
                                     est_1rm = calculate_estimated_1rm(s_w, s_r)
-                                    st.markdown(f"<div style='text-align: right; color: #9CA3AF; font-size: 0.72rem; margin-top: 4px; margin-bottom: 6px;'>1RM ESTIMADO: <b style='color: #10B981;'>{est_1rm} KG</b></div>", unsafe_allow_html=True)
+                                    st.markdown(f"<div style='text-align: right; color: #9CA3AF; font-size: 0.72rem; margin-top: 4px;'>1RM ESTIMADO: <b style='color: #10B981;'>{est_1rm} KG</b></div>", unsafe_allow_html=True)
 
-                                    # BOTÓN DE GUARDADO INMEDIATO DE ESTA SERIE EN SQLITE
                                     btn_set_label = "ACTUALIZAR SERIE" if is_saved else f"✓ GUARDAR SERIE #{s_num}"
                                     if st.button(btn_set_label, key=f"btn_save_set_{ex.name}_{s_num}", use_container_width=True, type="primary" if not is_saved else "secondary"):
                                         save_single_set(
@@ -211,7 +251,6 @@ if st.session_state["current_view"] == "workout":
         st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
         sauna_done = st.checkbox("Sauna seca realizada hoy (20-30 min)", key="sauna_check")
 
-        # El botón final solo sella el resumen del día (las series ya están 100% a salvo en SQLite)
         if st.button("FINALIZAR ENTRENAMIENTO COMPLETO", use_container_width=True, type="primary"):
             finalize_session_summary(
                 day_id=current_day.day_id,
@@ -220,7 +259,7 @@ if st.session_state["current_view"] == "workout":
                 sauna=sauna_done,
                 duration=55
             )
-            st.success(f"¡Entrenamiento de {current_day.day_name} finalizado con éxito!")
+            st.success(f"Entrenamiento de {current_day.day_name} finalizado con éxito.")
             time.sleep(1)
             st.rerun()
 
@@ -242,7 +281,7 @@ elif st.session_state["current_view"] == "home":
     e_val = st.slider("Nivel de Energía (1-5)", 1, 5, 4, key="h_e")
     a_val = st.slider("Molestia en Brazo (1=Sin dolor, 5=Alto)", 1, 5, 2, key="h_a")
     if st.button("CALCULAR READINESS", use_container_width=True):
-        score = log_readiness("2026-09-07", s_val, e_val, a_val)
+        score = log_readiness(today_date_str, s_val, e_val, a_val)
         st.session_state["readiness_score"] = score
         st.toast(f"Readiness actualizado a {score}%")
 
@@ -265,7 +304,7 @@ elif st.session_state["current_view"] == "programs":
         if not is_current:
             if st.button(f"ACTIVAR {prog.title.split(':')[0]}", key=f"btn_p_{prog.id}", use_container_width=True):
                 st.session_state["active_program_id"] = prog.id
-                st.session_state["selected_day_idx"] = 0
+                st.session_state["selected_day_idx"] = today_weekday_idx
                 st.rerun()
 
 # -------------------------------------------------------------
