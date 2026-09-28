@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 import datetime
 
@@ -70,31 +70,33 @@ for i, d in enumerate(active_program_data):
     d.date_num = str(d_date.day)
 
 # -------------------------------------------------------------
-# NAVEGADOR DE SEMANAS (< SEMANA X DE 4 >)
-# -------------------------------------------------------------
-col_w_prev, col_w_title, col_w_next = st.columns([1, 4, 1])
-with col_w_prev:
-    if st.button("<", key="btn_prev_week", use_container_width=True):
-        if st.session_state["current_block_week"] > 1:
-            st.session_state["current_block_week"] -= 1
-            st.rerun()
-with col_w_title:
-    st.markdown(
-        f'<div style="text-align: center; background: #161922; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.4rem 0.8rem;">'
-        f'<span style="color: white; font-weight: 900; font-size: 0.88rem; text-transform: uppercase;">SEMANA {st.session_state["current_block_week"]} DE 4 • {current_wave["name"].split(":")[1].upper()}</span>'
-        f'<div style="color: #10B981; font-size: 0.72rem; font-weight: 700; margin-top: 1px;">ONDA: {current_wave["pct_wave"][0]}% - {current_wave["pct_wave"][-1]}% 1RM</div>'
-        f'</div>',
-        unsafe_allow_html=True
-    )
-with col_w_next:
-    if st.button(">", key="btn_next_week", use_container_width=True):
-        if st.session_state["current_block_week"] < 4:
-            st.session_state["current_block_week"] += 1
-            st.rerun()
+# SELECTOR DE SEMANA DEL BLOQUE ? adaptado a m?vil
+week_names = {
+    1: "Acumulaci?n",
+    2: "Sobrecarga progresiva",
+    3: "Pico de intensidad",
+    4: "Descarga",
+}
+
+current_week = int(st.session_state.get("current_block_week", 1))
+selected_week = st.selectbox(
+    "SEMANA DEL BLOQUE",
+    options=[1, 2, 3, 4],
+    index=max(0, min(current_week - 1, 3)),
+    format_func=lambda week: f"Semana {week} ? {week_names[week]}",
+    key="week_selector",
+)
+
+st.session_state["current_block_week"] = selected_week
+current_wave = get_week_periodization_wave(selected_week)
+
+st.caption(
+    f"Intensidad programada: "
+    f"{current_wave['pct_wave'][0]}%?{current_wave['pct_wave'][-1]}% del 1RM"
+)
 
 st.markdown("<div style='height: 4px;'></div>", unsafe_allow_html=True)
 
-# -------------------------------------------------------------
 # 1. TIRA HORIZONTAL DE CALENDARIO
 # -------------------------------------------------------------
 cal_cols = st.columns(7)
