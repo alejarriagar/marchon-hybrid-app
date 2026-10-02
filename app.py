@@ -1,387 +1,476 @@
-import sys
+﻿import datetime as dt
+import math
 import os
-import datetime
+import sys
+import time
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 import streamlit as st
 
-st.set_page_config(
-    page_title="MARCHON Hybrid OS",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="MARCHON Hybrid OS", layout="wide", initial_sidebar_state="collapsed")
 
-import time
-import pandas as pd
-import plotly.express as px
+from src.database import repository as repo
+from src.seed_data import OCTOBER_BJJ_PROGRAM, PROGRAMS_CATALOG, SEPTEMBER_PROGRAM
+from src.services.progression import (
+    calculate_running_10k_paces,
+    calculate_target_weight,
+    get_week_periodization_wave,
+)
+from src.ui.components import check_pin_auth, render_exercise_item, render_kpi_table, render_phase_snapshot
 from src.ui.styles import apply_custom_styles
-from src.ui.components import (
-    check_pin_auth, render_phase_snapshot, 
-    render_kpi_table, render_exercise_item
-)
-from src.database.repository import (
-    init_db, save_single_set, get_day_logged_sets, finalize_session_summary,
-    get_completed_sessions_count, get_all_user_1rms, update_user_1rm, 
-    get_recent_workout_history, log_readiness, export_all_logs_dataframe
-)
-from src.services.progression import calculate_estimated_1rm, calculate_target_weight, get_week_periodization_wave, calculate_running_10k_paces
-from src.seed_data import SEPTEMBER_PROGRAM, OCTOBER_BJJ_PROGRAM, PROGRAMS_CATALOG
 
-init_db()
+TZ = ZoneInfo("Europe/Madrid")
+BJJ_START = dt.date(2026, 10, 1)
+DAY_NAMES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+WEEK_NAMES = {1: "Acumulación", 2: "Sobrecarga", 3: "Pico", 4: "Descarga"}
+RPE_OPTIONS = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0]
+LIFT_NAMES = {
+    "bench_press": "Bench Press",
+    "back_squat": "Back Squat",
+    "deadlift": "Deadlift",
+    "ohp": "Overhead Press",
+}
+BLOCK_COLORS = {"W": "green", "S": "orange", "H": "blue", "E": "violet", "R": "green", "B": "blue"}
+NAV_ITEMS = [("home", "HOME"), ("workout", "WORKOUT"), ("programs", "PROGRAMS"), ("kpis", "KPIS"), ("account", "ACCOUNT")]
+
 apply_custom_styles()
 
-if not check_pin_auth(default_pin="6367"):
+if not check_pin_auth():
     st.stop()
 
-user_1rms = get_all_user_1rms()
+repo.ensure_schema()
+ss = st.session_state
 
-# -------------------------------------------------------------
-# DETECCIÓN DE FECHA REAL Y LUNES DE ESTA SEMANA
-# -------------------------------------------------------------
-today_real = datetime.date.today()
-today_weekday_idx = today_real.weekday()  # Lunes = 0, ..., Domingo = 6
-monday_current_week = today_real - datetime.timedelta(days=today_weekday_idx)
 
-# Forzar inicialización limpia en el día actual si es la primera carga
-if "initialized_today" not in st.session_state:
-    st.session_state["selected_day_idx"] = today_weekday_idx
-    st.session_state["initialized_today"] = True
+# ---------------------------------------------------------------- utilidades
+def monday_of(day: dt.date) -> dt.date:
+    return day - dt.timedelta(days=day.weekday())
 
-if "active_program_id" not in st.session_state:
-    st.session_state["active_program_id"] = "perform_sep"
-if "selected_day_idx" not in st.session_state:
-    st.session_state["selected_day_idx"] = today_weekday_idx
-if "current_view" not in st.session_state:
-    st.session_state["current_view"] = "workout"
-if "current_block_week" not in st.session_state:
-    st.session_state["current_block_week"] = 1
-if "target_10k_time" not in st.session_state:
-    st.session_state["target_10k_time"] = 45.0
-if "readiness_score" not in st.session_state:
-    st.session_state["readiness_score"] = 90
 
-active_program_data = SEPTEMBER_PROGRAM if st.session_state["active_program_id"] == "perform_sep" else OCTOBER_BJJ_PROGRAM
-current_wave = get_week_periodization_wave(st.session_state["current_block_week"])
+def floor_to_plate(value: float, step: float = 2.5) -> float:
+    return math.floor(value / step) * step
 
-# Sincronizar fechas reales del calendario de esta semana
-for i, d in enumerate(active_program_data):
-    d_date = monday_current_week + datetime.timedelta(days=i)
-    d.date_num = str(d_date.day)
 
-# -------------------------------------------------------------
-# SELECTOR DE SEMANA DEL BLOQUE ? adaptado a m?vil
-week_names = {
-    1: "Acumulaci?n",
-    2: "Sobrecarga progresiva",
-    3: "Pico de intensidad",
-    4: "Descarga",
-}
+def short_date(day: dt.date) -> str:
+    return f"{day.day} {MONTHS[day.month - 1]}"
 
-current_week = int(st.session_state.get("current_block_week", 1))
-selected_week = st.selectbox(
-    "SEMANA DEL BLOQUE",
-    options=[1, 2, 3, 4],
-    index=max(0, min(current_week - 1, 3)),
-    format_func=lambda week: f"Semana {week} ? {week_names[week]}",
-    key="week_selector",
+
+def estimate_1rm(weight: float, reps: int, rpe: float) -> float:
+    """Epley corregido por RPE: suma las repeticiones en recámara."""
+    if weight <= 0 or reps <= 0:
+        return 0.0
+    effective = reps + max(0.0, 10.0 - rpe)
+    return round(weight if effective <= 1 else weight * (1 + effective / 30.0), 1)
+
+
+today = dt.datetime.now(TZ).date()
+this_monday = monday_of(today)
+block_start = monday_of(
+    dt.date.fromisoformat(repo.get_setting("block_start", this_monday.isoformat(), persist=True))
 )
 
-st.session_state["current_block_week"] = selected_week
-current_wave = get_week_periodization_wave(selected_week)
 
-st.caption(
-    f"Intensidad programada: "
-    f"{current_wave['pct_wave'][0]}%?{current_wave['pct_wave'][-1]}% del 1RM"
-)
+def block_info(day: dt.date):
+    weeks = (monday_of(day) - block_start).days // 7
+    if weeks < 0:
+        return 1, 0
+    return weeks % 4 + 1, weeks // 4 + 1
 
-st.markdown("<div style='height: 4px;'></div>", unsafe_allow_html=True)
 
-# 1. TIRA HORIZONTAL DE CALENDARIO
-# -------------------------------------------------------------
-cal_cols = st.columns(7)
-for idx, day in enumerate(active_program_data):
-    with cal_cols[idx]:
-        is_selected = (idx == st.session_state["selected_day_idx"])
-        is_today = (idx == today_weekday_idx)
-        
-        if idx < get_completed_sessions_count():
-            icon_str = "✓"
-        elif day.is_rest_day:
-            icon_str = "○"
-        else:
-            icon_str = "•"
-            
-        btn_label = f"{icon_str}\n{day.day_name}\n{day.date_num}"
-        btn_type = "primary" if is_selected else "secondary"
-        
-        if st.button(btn_label, key=f"cal_strip_{idx}", use_container_width=True, type=btn_type):
-            st.session_state["selected_day_idx"] = idx
-            st.rerun()
+def program_for(day: dt.date):
+    return OCTOBER_BJJ_PROGRAM if day >= BJJ_START else SEPTEMBER_PROGRAM
 
-current_day = active_program_data[st.session_state["selected_day_idx"]]
-selected_day_date_obj = monday_current_week + datetime.timedelta(days=st.session_state["selected_day_idx"])
-today_date_str = f"{selected_day_date_obj.year}-{selected_day_date_obj.month:02d}-{selected_day_date_obj.day:02d}"
 
-# Cargar series ya guardadas de este día
-saved_sets_map = get_day_logged_sets(today_date_str, current_day.day_id)
+def program_label(day: dt.date) -> str:
+    return "PERFORM + BJJ" if day >= BJJ_START else "PERFORM"
 
-# -------------------------------------------------------------
-# 2. CABECERA MARCHON CON IDENTIFICADOR DE HOY
-# -------------------------------------------------------------
-is_viewing_today = (st.session_state["selected_day_idx"] == today_weekday_idx)
-date_header_text = f"HOY {selected_day_date_obj.strftime('%d %b %Y').upper()}" if is_viewing_today else f"{current_day.day_name.upper()} {selected_day_date_obj.strftime('%d %b %Y').upper()}"
 
-st.markdown(f"""
-<div style="margin-top: 0.2rem; margin-bottom: 0.4rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 0.8rem; color: #9CA3AF; font-weight: 800; text-transform: uppercase;">{date_header_text}</span>
-        {'<span class="badge-green" style="font-size: 0.68rem;">SESIÓN DE HOY</span>' if is_viewing_today else ''}
-    </div>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.1rem; margin-bottom: 0.6rem;">
-        <div style="display: flex; gap: 0.8rem; align-items: baseline;">
-            <span style="color: #FFFFFF; font-size: 1.4rem; font-weight: 900; letter-spacing: -0.5px;">PERFORM</span>
-            <span style="color: #4B5563; font-size: 1.2rem; font-weight: 800; letter-spacing: -0.5px;">HYROX</span>
-        </div>
-        <div style="color: #6B7280; font-size: 1.3rem; font-weight: 300;">+</div>
-    </div>
-    <div style="display: flex; gap: 1.2rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 0.4rem; margin-bottom: 0.8rem;">
-        <span style="color: #FFFFFF; font-weight: 800; font-size: 0.9rem; border-bottom: 2px solid white; padding-bottom: 4px;">Workout</span>
-        <span style="color: #6B7280; font-weight: 600; font-size: 0.9rem;">Coach Notes</span>
-        <span style="color: #6B7280; font-weight: 600; font-size: 0.9rem;">Readiness</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+def week_label(offset: int) -> str:
+    monday = this_monday + dt.timedelta(weeks=offset)
+    week, block = block_info(monday)
+    phase = "Pre-bloque" if block == 0 else f"Bloque {block} · S{week} {WEEK_NAMES[week]}"
+    current = " · actual" if offset == 0 else ""
+    return f"Semana del {short_date(monday)} — {phase}{current}"
 
-# Botón para volver al día de hoy si estás viendo otro día
-if not is_viewing_today:
-    if st.button("← VOLVER A LA SESIÓN DE HOY", key="btn_back_to_today", use_container_width=True):
-        st.session_state["selected_day_idx"] = today_weekday_idx
-        st.rerun()
 
-# -------------------------------------------------------------
-# VISTA: WORKOUT CON 3 NIVELES COLAPSABLES
-# -------------------------------------------------------------
-if st.session_state["current_view"] == "workout":
-    if current_day.is_rest_day:
+# ---------------------------------------------------------------- estado
+ss.setdefault("week_offset", 0)
+ss.setdefault("sel_weekday", today.weekday())
+ss.setdefault("view", "workout")
+ss.setdefault("rest_end", None)
+ss.setdefault("rest_label", "")
+
+
+def go_today():
+    ss["week_offset"] = 0
+    ss["sel_weekday"] = today.weekday()
+
+
+def select_day(index: int):
+    ss["sel_weekday"] = index
+
+
+def set_view(view: str):
+    ss["view"] = view
+
+
+def start_rest(seconds: int, label: str):
+    if seconds and seconds > 0:
+        ss["rest_end"] = time.time() + seconds
+        ss["rest_label"] = label
+
+
+def skip_rest():
+    ss["rest_end"] = None
+
+
+def save_set_cb(session_date, day_id, block_week, ex_key, ex_name, set_number, pct, w_key, r_key, rpe_key, rest_seconds):
+    weight = float(ss.get(w_key, 0.0))
+    reps = int(ss.get(r_key, 0))
+    rpe = float(ss.get(rpe_key, 8.0))
+    repo.save_single_set(
+        session_date=session_date, day_id=day_id, block_week=block_week, exercise_key=ex_key,
+        exercise_name=ex_name, set_number=set_number, pct_1rm=pct, weight=weight, reps=reps,
+        rpe=rpe, est_1rm=estimate_1rm(weight, reps, rpe),
+    )
+    start_rest(rest_seconds, f"{ex_name} · serie {set_number}")
+    st.toast(f"Serie {set_number} guardada")
+
+
+def finalize_cb(session_date, day_id, title, sauna_key, duration_key):
+    repo.finalize_session(session_date, day_id, title, bool(ss.get(sauna_key, False)), int(ss.get(duration_key, 55)))
+    st.toast("Entrenamiento guardado")
+
+
+def apply_best_cb(updates):
+    for key, value in updates.items():
+        repo.update_user_1rm(key, value, LIFT_NAMES.get(key))
+    st.toast("1RMs actualizados con tus mejores marcas")
+
+
+def logout_cb():
+    ss["authenticated"] = False
+
+
+# ---------------------------------------------------------------- temporizador
+@st.fragment(run_every=1)
+def rest_timer():
+    end = ss.get("rest_end")
+    if not end:
+        return
+    remaining = int(round(end - time.time()))
+    if remaining > 0:
+        minutes, seconds = divmod(remaining, 60)
         st.markdown(
-            '<div style="background: #161922; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; text-align: center; padding: 2.5rem 1rem;">'
-            '<h4 style="color: white; font-weight: 900; text-transform: uppercase;">DESCANSO TOTAL & REGENERACIÓN</h4>'
-            '<p style="color: #9CA3AF; font-size: 0.85rem; margin-top: 0.4rem;">Prioriza 8 horas de sueño, nutrición limpia y sesión de sauna.</p>'
-            '</div>',
-            unsafe_allow_html=True
+            f'<div class="rest-banner">DESCANSO {minutes}:{seconds:02d}<span>{ss.get("rest_label", "")}</span></div>',
+            unsafe_allow_html=True,
         )
+        st.button("Saltar descanso", key="skip_rest_btn", on_click=skip_rest, use_container_width=True)
+    elif remaining > -6:
+        st.markdown('<div class="rest-banner done">DESCANSO TERMINADO</div>', unsafe_allow_html=True)
     else:
-        for b_idx, block in enumerate(current_day.blocks):
-            block_label = f"[{block.code}]  {block.title.upper()} ({block.subtitle})"
-            
-            with st.expander(block_label, expanded=(b_idx == 0 or b_idx == 1)):
-                if block.rest_block_desc:
-                    st.markdown(f"<div style='color: #9CA3AF; font-size: 0.72rem; margin-bottom: 8px; text-transform: uppercase;'>PAUTA DE DESCANSO: {block.rest_block_desc}</div>", unsafe_allow_html=True)
+        ss["rest_end"] = None
 
-                for e_idx, ex in enumerate(block.exercises):
-                    if block.code == "R":
-                        paces = calculate_running_10k_paces(st.session_state["target_10k_time"])
-                        with st.expander(f"{ex.name}  •  {ex.target}", expanded=True):
-                            st.markdown(
-                                f'<div style="color: #10B981; font-weight: 800; font-size: 0.88rem; margin-bottom: 4px;">RITMO SAN SILVESTRE: {paces["intervals_1000m"]}</div>'
-                                f'<div style="color: #9CA3AF; font-size: 0.78rem;">{ex.notes if ex.notes else ex.target} • {ex.rest_description}</div>',
-                                unsafe_allow_html=True
-                            )
-                    elif block.code in ["S", "H"] and (ex.exercise_key or ex.intensity_pct or ex.default_weight):
-                        base_1rm = user_1rms.get(ex.exercise_key, 100.0) if ex.exercise_key else 100.0
-                        num_sets = current_wave["sets"] if block.code == "S" else (ex.target_sets or 3)
-                        default_reps = current_wave["reps"] if block.code == "S" else (ex.target_reps or 10)
-                        pct_wave = current_wave["pct_wave"]
 
-                        ex_label = f"{ex.name}  •  {ex.target}"
-                        
-                        with st.expander(ex_label, expanded=(e_idx == 0)):
-                            st.markdown(
-                                f'<div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">'
-                                f'<span style="color: #9CA3AF; font-size: 0.78rem;">1RM Base: <b style="color: #FF5722;">{base_1rm} kg</b> | {ex.rest_description}</span>'
-                                f'</div>',
-                                unsafe_allow_html=True
-                            )
-                            if ex.notes:
-                                st.markdown(f"<div style='color: #9CA3AF; font-size: 0.75rem; margin-bottom: 10px;'>• {ex.notes}</div>", unsafe_allow_html=True)
+# ---------------------------------------------------------------- vistas
+def render_workout():
+    st.selectbox("Semana", list(range(-12, 13)), key="week_offset", format_func=week_label, label_visibility="collapsed")
+    week_monday = this_monday + dt.timedelta(weeks=ss["week_offset"])
+    completed = repo.get_completed_dates()
 
-                            for s_num in range(1, num_sets + 1):
-                                is_saved = (ex.name, s_num) in saved_sets_map
-                                saved_data = saved_sets_map.get((ex.name, s_num), {})
-
-                                default_pct = pct_wave[s_num - 1] if (block.code=="S" and s_num <= len(pct_wave)) else (ex.intensity_pct*100 if ex.intensity_pct else 75.0)
-                                calc_weight = calculate_target_weight(base_1rm, default_pct / 100.0) if ex.exercise_key else (ex.default_weight or 20.0)
-
-                                current_w = saved_data.get("weight", calc_weight)
-                                current_r = saved_data.get("reps", default_reps)
-                                current_rpe = saved_data.get("rpe", 8.0)
-
-                                status_tag = f"✓ GUARDADA: {current_w} KG x {current_r}" if is_saved else f"{default_pct}% 1RM • {calc_weight} KG"
-                                set_label = f"SERIE #{s_num}  •  {status_tag}"
-                                
-                                with st.expander(set_label, expanded=(not is_saved and s_num == 1) or is_saved):
-                                    c_w, c_r, c_rpe = st.columns([1.4, 1.2, 1.4])
-                                    with c_w:
-                                        s_w = st.number_input("Peso (kg)", min_value=0.0, value=float(current_w), step=2.5, key=f"mw_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
-                                    with c_r:
-                                        s_r = st.number_input("Reps", min_value=1, max_value=30, value=int(current_r), step=1, key=f"mr_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
-                                    with c_rpe:
-                                        rpe_opts = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0]
-                                        idx_rpe = rpe_opts.index(float(current_rpe)) if float(current_rpe) in rpe_opts else 4
-                                        s_rpe = st.selectbox("RPE", rpe_opts, index=idx_rpe, key=f"mrpe_{ex.name}_{s_num}_{st.session_state['current_block_week']}")
-                                    
-                                    est_1rm = calculate_estimated_1rm(s_w, s_r)
-                                    st.markdown(f"<div style='text-align: right; color: #9CA3AF; font-size: 0.72rem; margin-top: 4px;'>1RM ESTIMADO: <b style='color: #10B981;'>{est_1rm} KG</b></div>", unsafe_allow_html=True)
-
-                                    btn_set_label = "ACTUALIZAR SERIE" if is_saved else f"✓ GUARDAR SERIE #{s_num}"
-                                    if st.button(btn_set_label, key=f"btn_save_set_{ex.name}_{s_num}", use_container_width=True, type="primary" if not is_saved else "secondary"):
-                                        save_single_set(
-                                            date=today_date_str,
-                                            day_id=current_day.day_id,
-                                            exercise_name=ex.name,
-                                            set_num=s_num,
-                                            pct_1rm=default_pct,
-                                            weight=s_w,
-                                            reps=s_r,
-                                            rpe=s_rpe,
-                                            est_1rm=est_1rm
-                                        )
-                                        st.toast(f"Serie #{s_num} guardada en marchon.db ✓")
-                                        time.sleep(0.5)
-                                        st.rerun()
-
-                            rest_mins = (ex.rest_seconds or 120) // 60
-                            rest_secs = (ex.rest_seconds or 120) % 60
-                            st.markdown("<div style='height: 4px;'></div>", unsafe_allow_html=True)
-                            if st.button(f"INICIAR DESCANSO ({rest_mins}:{rest_secs:02d})", key=f"btn_t_{ex.name}", use_container_width=True):
-                                with st.spinner(f"Descansando {ex.rest_description}..."):
-                                    time.sleep(2)
-                                    st.toast(f"Tiempo cumplido: {ex.rest_description}")
-                    else:
-                        with st.expander(f"{ex.name}  •  {ex.target}", expanded=False):
-                            notes_with_rest = f"{ex.notes} • {ex.rest_description}" if ex.notes else ex.rest_description
-                            st.markdown(f"<div style='color: #9CA3AF; font-size: 0.8rem;'>{notes_with_rest}</div>", unsafe_allow_html=True)
-
-        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-        sauna_done = st.checkbox("Sauna seca realizada hoy (20-30 min)", key="sauna_check")
-
-        if st.button("FINALIZAR ENTRENAMIENTO COMPLETO", use_container_width=True, type="primary"):
-            finalize_session_summary(
-                day_id=current_day.day_id,
-                date=today_date_str,
-                title=current_day.title,
-                sauna=sauna_done,
-                duration=55
+    with st.container(key="cal_strip"):
+        cols = st.columns(7)
+        for i in range(7):
+            day_date = week_monday + dt.timedelta(days=i)
+            plan_day = program_for(day_date)[i]
+            if day_date.isoformat() in completed:
+                icon = "✓"
+            elif plan_day.is_rest_day:
+                icon = "○"
+            else:
+                icon = "•"
+            cols[i].button(
+                f"{icon}\n{DAY_NAMES[i]}\n{day_date.day}",
+                key=f"day_btn_{i}",
+                type="primary" if i == ss["sel_weekday"] else "secondary",
+                use_container_width=True,
+                on_click=select_day,
+                args=(i,),
             )
-            st.success(f"Entrenamiento de {current_day.day_name} finalizado con éxito.")
-            time.sleep(1)
+
+    sel_date = week_monday + dt.timedelta(days=ss["sel_weekday"])
+    day = program_for(sel_date)[ss["sel_weekday"]]
+    date_str = sel_date.isoformat()
+    block_week, block_num = block_info(sel_date)
+    wave = get_week_periodization_wave(block_week)
+    readiness = repo.get_readiness(date_str)
+    load_factor = 0.95 if (readiness is not None and readiness < 65) else 1.0
+    is_today = sel_date == today
+
+    block_txt = "PRE-BLOQUE" if block_num == 0 else f"BLOQUE {block_num} · SEMANA {block_week} · {WEEK_NAMES[block_week].upper()}"
+    date_txt = f"{'HOY · ' if is_today else ''}{DAY_NAMES[sel_date.weekday()].upper()} {sel_date.day} {MONTHS[sel_date.month - 1].upper()} {sel_date.year}"
+    st.markdown(
+        f'<div class="day-date">{date_txt}</div>'
+        f'<div class="day-program">{program_label(sel_date)}</div>'
+        f'<div class="day-title">{day.title}</div>'
+        f'<div class="day-block">{block_txt} · {wave["pct_wave"][0]:g}–{wave["pct_wave"][-1]:g}% 1RM</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not is_today:
+        st.button("Volver a hoy", on_click=go_today, use_container_width=True)
+    if load_factor < 1:
+        st.warning(f"Readiness {readiness}%: cargas sugeridas reducidas un 5 %.")
+    elif readiness is None and is_today:
+        st.caption("Aún no has registrado el readiness de hoy (pestaña HOME).")
+
+    if day.is_rest_day:
+        st.markdown(
+            '<div class="marchon-card" style="text-align:center;padding:2rem 1rem;">'
+            '<div style="color:white;font-weight:900;">DESCANSO Y REGENERACIÓN</div>'
+            '<div class="muted-small">Sueño, nutrición y sauna.</div></div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    saved = repo.get_day_logged_sets(date_str, day.day_id)
+    one_rms = repo.get_all_user_1rms()
+    paces = calculate_running_10k_paces(float(repo.get_setting("target_10k", "45")))
+    first_pending_opened = False
+
+    for b_idx, block in enumerate(day.blocks):
+        color = BLOCK_COLORS.get(block.code, "gray")
+        with st.expander(f":{color}[**{block.code}**]   ·   **{block.title}**", expanded=(block.code != "W")):
+            caption = block.subtitle
+            if block.rest_block_desc:
+                caption += f" · Descanso: {block.rest_block_desc}"
+            st.caption(caption)
+
+            for e_idx, ex in enumerate(block.exercises):
+                if block.code in ("S", "H"):
+                    is_main = bool(ex.exercise_key)
+                    if is_main:
+                        num_sets = wave["sets"]
+                        reps_default = wave["reps"]
+                        one_rm = float(one_rms.get(ex.exercise_key, 0.0))
+                    else:
+                        num_sets = min(ex.target_sets, 2) if block_week == 4 else ex.target_sets
+                        reps_default = ex.target_reps
+                        one_rm = 0.0
+                    done = sum(1 for s in range(1, num_sets + 1) if (ex.name, s) in saved)
+                    ex_id = f"{date_str}_{b_idx}_{e_idx}"
+
+                    with st.container(border=True, key=f"ex_{ex_id}"):
+                        status = "✓ completado" if done == num_sets else f"{done}/{num_sets} series"
+                        st.markdown(
+                            f'<div class="ex-head"><span class="ex-title">{ex.name}</span>'
+                            f'<span class="ex-status{" ok" if done == num_sets else ""}">{status}</span></div>'
+                            f'<div class="ex-sub">{ex.target} · {ex.rest_description}</div>',
+                            unsafe_allow_html=True,
+                        )
+                        if is_main:
+                            extra = " · -5 % por readiness" if load_factor < 1 else ""
+                            st.caption(f"1RM: {one_rm:g} kg{extra}")
+                        if ex.notes:
+                            st.caption(ex.notes)
+
+                        auto_open = (not first_pending_opened) and done < num_sets
+                        if auto_open:
+                            first_pending_opened = True
+
+                        if st.toggle("Registrar series", value=auto_open, key=f"show_{ex_id}"):
+                            labels = [f"S{s}{' ✓' if (ex.name, s) in saved else ''}" for s in range(1, num_sets + 1)]
+                            for s, tab in zip(range(1, num_sets + 1), st.tabs(labels)):
+                                with tab:
+                                    rec = saved.get((ex.name, s))
+                                    if is_main:
+                                        pct_list = wave["pct_wave"]
+                                        pct = pct_list[s - 1] if s <= len(pct_list) else pct_list[-1]
+                                        suggested = calculate_target_weight(one_rm * load_factor, pct / 100.0) if one_rm else 0.0
+                                        st.markdown(f"**Objetivo:** {pct:g}% 1RM → **{suggested:g} kg** × {reps_default}")
+                                    else:
+                                        pct = 0.0
+                                        suggested = float(ex.default_weight or 0.0)
+                                        st.markdown(f"**Objetivo:** {ex.target}")
+
+                                    w0 = float(rec["weight"]) if rec else float(suggested)
+                                    r0 = int(rec["reps"]) if rec else int(reps_default)
+                                    rpe0 = float(rec["rpe"]) if rec else 8.0
+                                    base = f"{ex_id}_{s}_{w0:g}_{r0}"
+                                    w_key, r_key, rpe_key = f"w_{base}", f"r_{base}", f"rpe_{base}"
+
+                                    st.number_input("Peso (kg)", min_value=0.0, max_value=500.0, value=w0, step=2.5, key=w_key)
+                                    c_reps, c_rpe = st.columns(2)
+                                    c_reps.number_input("Reps", min_value=0, max_value=50, value=r0, step=1, key=r_key)
+                                    c_rpe.selectbox(
+                                        "RPE", RPE_OPTIONS,
+                                        index=RPE_OPTIONS.index(rpe0) if rpe0 in RPE_OPTIONS else 4,
+                                        key=rpe_key,
+                                    )
+                                    if rec:
+                                        st.caption(
+                                            f"Guardada: {rec['weight']:g} kg × {rec['reps']} @ RPE {rec['rpe']:g}"
+                                            f" · 1RM est. {rec['est_1rm']:g} kg"
+                                        )
+                                    st.button(
+                                        "Actualizar serie" if rec else f"Guardar serie {s}",
+                                        key=f"save_{base}",
+                                        type="secondary" if rec else "primary",
+                                        use_container_width=True,
+                                        on_click=save_set_cb,
+                                        args=(date_str, day.day_id, block_week, ex.exercise_key, ex.name, s, pct,
+                                              w_key, r_key, rpe_key, ex.rest_seconds or 0),
+                                    )
+                elif block.code == "R":
+                    name = ex.name.lower()
+                    if "x 1000" in name or "x 2000" in name:
+                        pace, kind = paces["intervals_1000m"], "series"
+                    elif "ritmo" in name or "fuertes" in name:
+                        pace, kind = paces["race_pace"], "ritmo 10k"
+                    else:
+                        pace, kind = paces["z2_easy"], "Z2"
+                    render_exercise_item(ex.name, ex.target, f"Ritmo {kind}: {pace} · {ex.rest_description}")
+                else:
+                    note = f"{ex.notes} · {ex.rest_description}" if ex.notes else ex.rest_description
+                    render_exercise_item(ex.name, ex.target, note)
+
+    st.divider()
+    sauna_key, duration_key = f"sauna_{date_str}", f"dur_{date_str}"
+    st.checkbox("Sauna realizada (20-30 min)", key=sauna_key)
+    st.number_input("Duración (min)", min_value=10, max_value=240, value=55, step=5, key=duration_key)
+    st.button(
+        "Actualizar resumen de la sesión" if date_str in completed else "Finalizar entrenamiento",
+        type="primary",
+        use_container_width=True,
+        on_click=finalize_cb,
+        args=(date_str, day.day_id, day.title, sauna_key, duration_key),
+    )
+
+
+def render_home():
+    today_str = today.isoformat()
+    st.markdown("### PANEL")
+    count, minutes = repo.get_session_stats()
+    one_rms = repo.get_all_user_1rms()
+    best = repo.get_best_est_1rm_by_key()
+    pbs = sum(1 for key, value in best.items() if key in one_rms and value > one_rms[key])
+    render_phase_snapshot(sessions=count, pbs=pbs, total_time=f"{minutes // 60}h {minutes % 60:02d}m")
+
+    st.markdown("#### Readiness de hoy")
+    current = repo.get_readiness(today_str)
+    if current is not None:
+        st.caption(f"Registrado hoy: {current}%" + (" · cargas -5 %" if current < 65 else ""))
+    with st.form("readiness_form"):
+        sleep = st.slider("Calidad de sueño", 1, 5, 4)
+        energy = st.slider("Energía", 1, 5, 4)
+        soreness = st.slider("Molestia en el brazo (1 = nada · 5 = mucha)", 1, 5, 2)
+        if st.form_submit_button("Guardar readiness", use_container_width=True):
+            score = repo.log_readiness(today_str, sleep, energy, soreness)
+            st.success(f"Readiness {score}%" + (" — se reducirán las cargas un 5 %" if score < 65 else ""))
+
+    st.markdown("#### Últimas sesiones")
+    sessions = repo.get_recent_sessions(10)
+    if not sessions:
+        st.caption("Aún no has finalizado ninguna sesión.")
+    for row in sessions:
+        extra = " · sauna" if row["sauna"] else ""
+        render_exercise_item(row["title"], f"{row['volume_kg']:.0f} kg", f"{row['date']} · {row['duration']} min{extra}")
+
+
+def render_programs():
+    st.markdown("### PROGRAMAS")
+    active_id = "perform_oct_bjj" if today >= BJJ_START else "perform_sep"
+    for prog in PROGRAMS_CATALOG:
+        badge = '<span class="badge-green">ACTIVO</span>' if prog.id == active_id else ""
+        tags = "".join(f'<span class="badge-tag">{t}</span>' for t in prog.tags)
+        st.markdown(
+            f'<div class="marchon-card"><div style="display:flex;justify-content:space-between;gap:8px;">'
+            f'<span class="badge-tag">{prog.category}</span>{badge}</div>'
+            f'<div style="color:white;font-weight:800;margin:0.4rem 0;">{prog.title}</div>'
+            f'<div class="muted-small" style="margin-bottom:0.5rem;">{prog.description}</div>{tags}</div>',
+            unsafe_allow_html=True,
+        )
+    st.caption("El programa cambia solo por fecha: la fase con BJJ se activa el 1 de octubre de 2026.")
+
+
+def render_kpis():
+    st.markdown("### KPIS")
+    one_rms = repo.get_all_user_1rms()
+    best = repo.get_best_est_1rm_by_key()
+    rows, updates = [], {}
+    for key, name in LIFT_NAMES.items():
+        current = float(one_rms.get(key, 0.0))
+        top = best.get(key)
+        delta = f"{(top / current - 1) * 100:+.1f}%" if (top and current) else "—"
+        rows.append({"name": name, "current": f"{current:g} kg", "best": f"{top:g} kg" if top else "—", "delta": delta})
+        if top and floor_to_plate(top) > current:
+            updates[key] = floor_to_plate(top)
+    render_kpi_table(rows)
+    st.caption("Mejor estimado = Epley corregido por RPE, a partir de tus series guardadas.")
+
+    if updates:
+        resumen = ", ".join(f"{LIFT_NAMES[k]} → {v:g} kg" for k, v in updates.items())
+        st.info(f"Puedes subir tus 1RMs: {resumen}")
+        st.button("Actualizar 1RMs con mis mejores marcas", type="primary", use_container_width=True,
+                  on_click=apply_best_cb, args=(updates,))
+
+    paces = calculate_running_10k_paces(float(repo.get_setting("target_10k", "45")))
+    st.markdown("#### San Silvestre 10k")
+    render_exercise_item("Ritmo de carrera", paces["race_pace"])
+    render_exercise_item("Series 1000 m", paces["intervals_1000m"])
+    render_exercise_item("Rodaje Z2", paces["z2_easy"])
+
+
+def render_account():
+    st.markdown("### CUENTA")
+    one_rms = repo.get_all_user_1rms()
+    with st.form("account_form"):
+        st.markdown("#### 1RMs")
+        values = {
+            key: st.number_input(f"{name} (kg)", min_value=0.0, max_value=500.0,
+                                 value=float(one_rms.get(key, 0.0)), step=2.5)
+            for key, name in LIFT_NAMES.items()
+        }
+        target = st.number_input("Objetivo San Silvestre 10k (min)", min_value=30.0, max_value=90.0,
+                                 value=float(repo.get_setting("target_10k", "45")), step=0.5)
+        start = st.date_input("Inicio del bloque (lunes de la semana 1)", value=block_start, format="DD/MM/YYYY")
+        if st.form_submit_button("Guardar", type="primary", use_container_width=True):
+            for key, value in values.items():
+                repo.update_user_1rm(key, value, LIFT_NAMES[key])
+            repo.set_setting("target_10k", float(target))
+            repo.set_setting("block_start", monday_of(start).isoformat())
+            st.toast("Guardado")
             st.rerun()
 
-# -------------------------------------------------------------
-# VISTA: HOME
-# -------------------------------------------------------------
-elif st.session_state["current_view"] == "home":
-    st.markdown("<h3 style='color: white; font-weight: 900; text-transform: uppercase;'>Panel de Control</h3>", unsafe_allow_html=True)
-    total_sessions = 3 + get_completed_sessions_count()
-    render_phase_snapshot(sessions=total_sessions, pbs=2, total_time=f"{total_sessions * 55 // 60}h {total_sessions * 55 % 60}m")
-    
-    st.markdown("""
-    <div style="background: #161922; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1rem; margin-top: 1rem;">
-        <div style="font-size: 0.9rem; font-weight: 800; color: white; margin-bottom: 0.2rem; text-transform: uppercase;">Estado de Recuperación (Readiness)</div>
-        <div style="font-size: 0.72rem; color: #9CA3AF; margin-bottom: 0.5rem;">Autorregulación biológica</div>
-    </div>
-    """, unsafe_allow_html=True)
-    s_val = st.slider("Calidad de Sueño (1-5)", 1, 5, 4, key="h_s")
-    e_val = st.slider("Nivel de Energía (1-5)", 1, 5, 4, key="h_e")
-    a_val = st.slider("Molestia en Brazo (1=Sin dolor, 5=Alto)", 1, 5, 2, key="h_a")
-    if st.button("CALCULAR READINESS", use_container_width=True):
-        score = log_readiness(today_date_str, s_val, e_val, a_val)
-        st.session_state["readiness_score"] = score
-        st.toast(f"Readiness actualizado a {score}%")
+    if repo.using_external_db():
+        st.caption("Base de datos: externa (Postgres). Tus datos se conservan entre reinicios.")
+    else:
+        st.caption("Base de datos: SQLite local. En Streamlit Cloud estos datos pueden perderse; configura DATABASE_URL.")
 
-# -------------------------------------------------------------
-# VISTA: PROGRAMAS
-# -------------------------------------------------------------
-elif st.session_state["current_view"] == "programs":
-    st.markdown("<h3 style='color: white; font-weight: 900; text-transform: uppercase;'>Programas de Entrenamiento</h3>", unsafe_allow_html=True)
-    for prog in PROGRAMS_CATALOG:
-        is_current = (prog.id == st.session_state["active_program_id"])
-        tags_str = "".join([f'<span class="badge-tag">{t}</span>' for t in prog.tags])
-        st.markdown(f"""
-        <div style="background: #161922; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1rem; margin-bottom: 0.8rem;">
-            <span class="badge-tag">{prog.category}</span>
-            <h4 style="color: white; margin: 0.3rem 0; font-weight: 800;">{prog.title}</h4>
-            <p style="color: #9CA3AF; font-size: 0.82rem; margin-bottom: 0.5rem;">{prog.description}</p>
-            {tags_str}
-        </div>
-        """, unsafe_allow_html=True)
-        if not is_current:
-            if st.button(f"ACTIVAR {prog.title.split(':')[0]}", key=f"btn_p_{prog.id}", use_container_width=True):
-                st.session_state["active_program_id"] = prog.id
-                st.session_state["selected_day_idx"] = today_weekday_idx
-                st.rerun()
+    df = repo.export_all_logs_dataframe()
+    if not df.empty:
+        st.download_button("Exportar series a CSV", df.to_csv(index=False).encode("utf-8"),
+                           file_name="marchon_series.csv", mime="text/csv", use_container_width=True)
+    st.button("Cerrar sesión", on_click=logout_cb, use_container_width=True)
 
-# -------------------------------------------------------------
-# VISTA: KPIS
-# -------------------------------------------------------------
-elif st.session_state["current_view"] == "kpis":
-    st.markdown("<h3 style='color: white; font-weight: 900; text-transform: uppercase;'>Progreso & Rendimiento</h3>", unsafe_allow_html=True)
-    kpis_data = [
-        {"name": "Bench Press", "metric": "1RM Actual", "baseline": f"{user_1rms.get('bench_press', 120)*0.95:.1f} kg", "retest": f"{user_1rms.get('bench_press', 120)} kg", "delta": "+5.2%"},
-        {"name": "Back Squat", "metric": "1RM Actual", "baseline": "135 kg", "retest": f"{user_1rms.get('back_squat', 140)} kg", "delta": "+3.7%"},
-        {"name": "Deadlift", "metric": "1RM Actual", "baseline": "155 kg", "retest": f"{user_1rms.get('deadlift', 165)} kg", "delta": "+6.4%"},
-        {"name": "San Silvestre 10k", "metric": "Ritmo Umbral", "baseline": "4:45/km", "retest": f"{calculate_running_10k_paces(st.session_state['target_10k_time'])['intervals_1000m']}", "delta": "+6.0%"},
-    ]
-    render_kpi_table(kpis_data)
 
-# -------------------------------------------------------------
-# VISTA: ACCOUNT
-# -------------------------------------------------------------
-elif st.session_state["current_view"] == "account":
-    st.markdown("<h3 style='color: white; font-weight: 900; text-transform: uppercase;'>Perfil de Marcas 1RM</h3>", unsafe_allow_html=True)
-    new_bench = st.number_input("Bench Press (1RM kg)", min_value=20.0, value=float(user_1rms.get("bench_press", 120.0)), step=2.5)
-    new_ohp = st.number_input("Overhead Press (1RM kg)", min_value=15.0, value=float(user_1rms.get("ohp", 70.0)), step=2.5)
-    new_squat = st.number_input("Back Squat (1RM kg)", min_value=20.0, value=float(user_1rms.get("back_squat", 140.0)), step=2.5)
-    new_deadlift = st.number_input("Deadlift (1RM kg)", min_value=30.0, value=float(user_1rms.get("deadlift", 165.0)), step=2.5)
-    target_10k = st.number_input("Objetivo San Silvestre 10k (min)", min_value=30.0, value=float(st.session_state["target_10k_time"]), step=0.5)
+# ---------------------------------------------------------------- render
+rest_timer()
 
-    if st.button("GUARDAR 1RMs", use_container_width=True, type="primary"):
-        update_user_1rm("bench_press", new_bench)
-        update_user_1rm("ohp", new_ohp)
-        update_user_1rm("back_squat", new_squat)
-        update_user_1rm("deadlift", new_deadlift)
-        st.session_state["target_10k_time"] = target_10k
-        st.success("Marcas actualizadas correctamente.")
-        time.sleep(1)
-        st.rerun()
+VIEWS = {
+    "home": render_home,
+    "workout": render_workout,
+    "programs": render_programs,
+    "kpis": render_kpis,
+    "account": render_account,
+}
+VIEWS.get(ss["view"], render_workout)()
 
-    if st.button("CERRAR SESIÓN", use_container_width=True):
-        st.session_state["authenticated"] = False
-        st.rerun()
-
-# -------------------------------------------------------------
-# BARRA INFERIOR DE NAVEGACIÓN
-# -------------------------------------------------------------
-st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True)
-bot_c1, bot_c2, bot_c3, bot_c4, bot_c5 = st.columns(5)
-with bot_c1:
-    if st.button("HOME", key="bot_home", use_container_width=True, type="primary" if st.session_state["current_view"]=="home" else "secondary"):
-        st.session_state["current_view"] = "home"
-        st.rerun()
-with bot_c2:
-    if st.button("WORKOUT", key="bot_workout", use_container_width=True, type="primary" if st.session_state["current_view"]=="workout" else "secondary"):
-        st.session_state["current_view"] = "workout"
-        st.rerun()
-with bot_c3:
-    if st.button("PROGRAMS", key="bot_progs", use_container_width=True, type="primary" if st.session_state["current_view"]=="programs" else "secondary"):
-        st.session_state["current_view"] = "programs"
-        st.rerun()
-with bot_c4:
-    if st.button("KPIS", key="bot_kpis", use_container_width=True, type="primary" if st.session_state["current_view"]=="kpis" else "secondary"):
-        st.session_state["current_view"] = "kpis"
-        st.rerun()
-with bot_c5:
-    if st.button("ACCOUNT", key="bot_account", use_container_width=True, type="primary" if st.session_state["current_view"]=="account" else "secondary"):
-        st.session_state["current_view"] = "account"
-        st.rerun()
+with st.container(key="bottom_nav"):
+    nav_cols = st.columns(len(NAV_ITEMS))
+    for col, (view, label) in zip(nav_cols, NAV_ITEMS):
+        col.button(label, key=f"nav_{view}", type="primary" if ss["view"] == view else "secondary",
+                   use_container_width=True, on_click=set_view, args=(view,))
