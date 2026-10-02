@@ -1,4 +1,4 @@
-﻿import streamlit as st
+import streamlit as st
 
 CSS = """
 <style>
@@ -76,7 +76,17 @@ header[data-testid="stHeader"] { background: transparent; }
 .stat-value { font-size: 1.25rem; font-weight: 800; color: #FFFFFF; }
 .stat-label { font-size: 0.66rem; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
 div.stButton > button { border-radius: 10px; font-weight: 700; }
+
+/* Ajustes m?vil */
+input, select, textarea { font-size: 16px !important; }
+[data-testid="stNumberInput"] button { min-width: 40px; min-height: 40px; }
+@media (max-width: 640px) {
+    .block-container { padding-left: 0.75rem !important; padding-right: 0.75rem !important; padding-top: 0.6rem !important; }
+    .day-program { font-size: 1.25rem; }
+    .rest-banner { font-size: 0.85rem; padding: 0.45rem 0.8rem; }
+}
 </style>
+
 """
 
 
