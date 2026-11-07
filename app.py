@@ -1,4 +1,4 @@
-﻿import datetime as dt
+import datetime as dt
 import math
 import os
 import sys
@@ -12,6 +12,7 @@ import streamlit as st
 st.set_page_config(page_title="MARCHON Hybrid OS", layout="wide", initial_sidebar_state="collapsed")
 
 from src.database import repository as repo
+from src.seed_block_nov import NOV_BLOCK_START, NOVEMBER_CATALOG, NOVEMBER_PROGRAM
 from src.seed_data import OCTOBER_BJJ_PROGRAM, PROGRAMS_CATALOG, SEPTEMBER_PROGRAM
 from src.services.progression import (
     calculate_running_10k_paces,
@@ -73,14 +74,23 @@ block_start = monday_of(
 )
 
 
+BLOCK1_START = dt.date(2026, 10, 18)
+
+
 def block_info(day: dt.date):
-    weeks = (monday_of(day) - block_start).days // 7
+    """Devuelve (semana del bloque 1-4, n?mero de bloque). Bloque 0 = antes del bloque 1."""
+    if day >= NOV_BLOCK_START:
+        weeks = (day - NOV_BLOCK_START).days // 7
+        return weeks % 4 + 1, 2 + weeks // 4
+    weeks = (day - BLOCK1_START).days // 7
     if weeks < 0:
         return 1, 0
-    return weeks % 4 + 1, weeks // 4 + 1
+    return weeks % 4 + 1, 1 + weeks // 4
 
 
 def program_for(day: dt.date):
+    if day >= NOV_BLOCK_START:
+        return NOVEMBER_PROGRAM
     return OCTOBER_BJJ_PROGRAM if day >= BJJ_START else SEPTEMBER_PROGRAM
 
 
@@ -382,8 +392,8 @@ def render_home():
 
 def render_programs():
     st.markdown("### PROGRAMAS")
-    active_id = "perform_oct_bjj" if today >= BJJ_START else "perform_sep"
-    for prog in PROGRAMS_CATALOG:
+    active_id = "perform_nov" if today >= NOV_BLOCK_START else ("perform_oct_bjj" if today >= BJJ_START else "perform_sep")
+    for prog in [*PROGRAMS_CATALOG, NOVEMBER_CATALOG]:
         badge = '<span class="badge-green">ACTIVO</span>' if prog.id == active_id else ""
         tags = "".join(f'<span class="badge-tag">{t}</span>' for t in prog.tags)
         st.markdown(
